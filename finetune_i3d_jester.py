@@ -128,13 +128,13 @@ if __name__ == '__main__':
     # Hyperparameters
     USE_GPU = True
     NUM_CLASSES = 27 # number of classes in Jester
-    FOLD = 1
     BATCH_SIZE = 16
     NUM_WORKERS = 2
     SHUFFLE = True
     PIN_MEMORY = True
     SAVE_DIR = 'checkpoints/'
     EPOCHS = 30
+    FREEZE_LAYERS = True
     LR = 0.0001
 
     # Transforms
@@ -181,11 +181,15 @@ if __name__ == '__main__':
     # Load pre-trained I3D model
     i3d = InceptionI3d(400, in_channels=3) # pre-trained model has 400 output classes
     i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
+
+    if FREEZE_LAYERS:
+        for param in i3d.parameters():
+            param.requires_grad = False # freeze everything except for the final layer
+
     i3d.replace_logits(NUM_CLASSES) # replace final layer to work with new dataset
 
     # Set up optimizer
     optimizer = optim.Adam(i3d.parameters(), lr=LR) # TODO: we are currently plateuing, maybe change this?
-    # optimizer = optim.SGD(i3d.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0000001)
     # lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [300, 1000])
 
     # Start training
