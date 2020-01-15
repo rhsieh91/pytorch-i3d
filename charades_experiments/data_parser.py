@@ -3,7 +3,7 @@ import csv
 
 from collections import namedtuple
 
-ListDataJpeg = namedtuple('ListDataJpeg', ['id', 'label', 'action', 'scene', 'path'])
+ListDataJpeg = namedtuple('ListDataJpeg', ['id', 'actions', 'scene', 'path'])
 
 class JpegDataset(object):
 
@@ -17,13 +17,13 @@ class JpegDataset(object):
     def read_csv_input(self, csv_path, data_root):
         csv_data = []
         with open(csv_path) as csvfile:
-            csv_reader = csv.reader(csvfile, delimiter=';')
-            for row in csv_reader:
-                item = ListDataJpeg(row[0],
-                                    row[1],
-                                    row[2], # action
-                                    row[3], # scene
-                                    os.path.join(data_root, row[0])
+            reader = csv.DictReader(csvfile) # data/Charades_v1_train.csv
+            for row in reader:
+                actions = [b for a in row['actions'].split(';') for b in a.split() if 'c' in b]
+                item = ListDataJpeg(row['id'],
+                                    actions,
+                                    row['scene'],
+                                    os.path.join(data_root, row['id'])
                                     )
                 csv_data.append(item)
         return csv_data
@@ -31,9 +31,9 @@ class JpegDataset(object):
     def read_csv_labels(self, csv_path):
         classes = []
         with open(csv_path) as csvfile:
-            csv_reader = csv.reader(csvfile)
-            for row in csv_reader:
-                classes.append(row[0])
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                classes.append(row['id'])
         return classes
 
     def get_two_way_dict(self, classes):
@@ -42,27 +42,3 @@ class JpegDataset(object):
             classes_dict[item] = i
             classes_dict[i] = item
         return classes_dict
-
-    # To do
-    def summarize(self):
-        # number of instances
-        print("\nNumber of instances ----------------------------------------")
-        print(self.data_df.shape[0])
-
-        # number of classes
-        print("\nNumber of classes ------------------------------------------")
-        print(self.data_df.template.nunique())
-
-        # number of instances per class
-        print("\nNumber of instances per class ------------------------------")
-        print(self.data_df.template.value_counts())
-
-        # max and min duration of vides
-        print("\nMax, Min, Avg, Std duration --------------------------------")
-        print(self.data_df.duration.max())
-        print(self.data_df.duration.min())
-        print(self.data_df.duration.mean())
-        print(self.data_df.duration.std())
-
-        print("\n")
-
