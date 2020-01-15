@@ -7,7 +7,6 @@ import time
 from PIL import Image
 from data_parser import JpegDataset
 from torchvision.transforms import *
-# from utils import save_images_for_debug
 
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG']
 
@@ -47,13 +46,13 @@ class VideoFolder(torch.utils.data.Dataset):
             img = self.transform(img)
             imgs.append(torch.unsqueeze(img, 0))
 
-        action_idx = self.action_classes_dict[item.action]
+        action_idxs = [self.action_classes_dict[a] for a in item.actions]
         scene_idx = self.scene_classes_dict[item.scene]
 
         # format data to torch
         data = torch.cat(imgs)
         data = data.permute(1, 0, 2, 3)
-        return (data, action_idx, scene_idx)
+        return (data, action_idxs, scene_idx)
 
     def __len__(self):
         return len(self.csv_data)
@@ -86,35 +85,3 @@ class VideoFolder(torch.utils.data.Dataset):
         frame_names = frame_names[offset:num_frames_necessary +
                                   offset:self.step_size]
         return frame_names
-
-
-if __name__ == '__main__':
-    transform = Compose([
-                        CenterCrop(84),
-                        ToTensor(),
-                        # Normalize(
-                        #     mean=[0.485, 0.456, 0.406],
-                        #     std=[0.229, 0.224, 0.225])
-                        ])
-    loader = VideoFolder(root="/hdd/20bn-datasets/20bn-jester-v1/",
-                         csv_file_input="csv_files/jester-v1-validation.csv",
-                         csv_file_labels="csv_files/jester-v1-labels.csv",
-                         clip_size=18,
-                         nclips=1,
-                         step_size=2,
-                         is_val=False,
-                         transform=transform,
-                         loader=default_loader)
-    # save_images_for_debug("input_images", data_item.unsqueeze(0))
-
-    train_loader = torch.utils.data.DataLoader(
-        loader,
-        batch_size=10, shuffle=False,
-        num_workers=5, pin_memory=True)
-
-    start = time.time()
-    for i, a in enumerate(train_loader):
-        if i == 49:
-            break
-    print("Size --> {}".format(a[0].size()))
-    print(time.time() - start)

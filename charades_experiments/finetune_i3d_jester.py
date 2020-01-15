@@ -92,7 +92,7 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
                     # Compute classification loss
                     a_weight = torch.Tensor([28.6, 29.4, 27.7, 28.6, 1.16]) # distribution: 0.035, 0.034, 0.036 , 0.035, 0.86
                     a_weight = a_weight.to(device=device)
-                    loss = F.cross_entropy(mean_frame_logits, class_idx, weight=a_weight)
+                    loss = F.cross_entropy(mean_frame_logits, class_idx, weight=a_weight) # TODO softmax loss for charades?
                     writer.add_scalar('Loss/train', loss, n_iter)
                     
                     optimizer.zero_grad()
