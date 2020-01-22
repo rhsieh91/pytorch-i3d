@@ -1,5 +1,6 @@
 # This script extracts rgb frames from a video
 # It assumes a file hierarchy: video_root -> videos (not clustered by class)
+# Run: python extract_rgb_from_video.py --video_root $video_root --out_root $out_root
 # Contributer: Boxiao Pan
 
 import cv2
