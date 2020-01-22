@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import numpy as np
 import math
-from shutil import copyfile
+import shutil
 
 if __name__ == '__main__': 
     
@@ -35,9 +35,11 @@ if __name__ == '__main__':
             num_frames = math.floor(NUM_FPS * length)
             
             # copy from start to end
-            for k in range(start * NUM_FPS, end * NUM_FPS):
-                src = os.path.join(args.input_root, frame_names[k])
+            for k in range(math.floor(float(start) * NUM_FPS), math.floor(float(end) * NUM_FPS)):
+                if k >= len(frame_names):
+                    break
+                src = os.path.join(args.input_root, row['id'], frame_names[k])
                 dst = os.path.join(args.target_root, row['id'] + '-' + str(j).zfill(2))
                 if not os.path.exists(dst):
                     os.makedirs(dst)
-                copyfile(src, dst)
+                shutil.copy2(src, dst)
