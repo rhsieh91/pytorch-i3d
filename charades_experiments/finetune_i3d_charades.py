@@ -90,9 +90,10 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
                 # Backward pass only if in 'train' mode
                 if phase == 'train':
                     # Compute classification loss
-                    a_weight = torch.Tensor([28.6, 29.4, 27.7, 28.6, 1.16]) # distribution: 0.035, 0.034, 0.036 , 0.035, 0.86
-                    a_weight = a_weight.to(device=device)
-                    loss = F.cross_entropy(mean_frame_logits, class_idx, weight=a_weight) # TODO softmax loss for charades?
+                    # a_weight = torch.Tensor([28.6, 29.4, 27.7, 28.6, 1.16])
+                    # a_weight = a_weight.to(device=device)
+                    # loss = F.cross_entropy(mean_frame_logits, class_idx, weight=a_weight) 
+                    loss = F.cross_entropy(mean_frame_logits, class_idx)
                     writer.add_scalar('Loss/train', loss, n_iter)
                     
                     optimizer.zero_grad()
@@ -175,7 +176,7 @@ if __name__ == '__main__':
 
     # Hyperparameters
     USE_GPU = True
-    NUM_CLASSES = 5
+    NUM_CLASSES = 157
     LR = args.lr
     BATCH_SIZE = args.bs
     EPOCHS = args.epochs 
@@ -202,10 +203,10 @@ if __name__ == '__main__':
         ])
 
     # Load dataset
-    d_train = VideoFolder(root="/vision/group/video/scratch/jester/rgb",
-                          csv_file_input="./data/jester/annotations/jester-v1-train-modified.csv",
-                          csv_file_action_labels="./data/jester/annotations/jester-v1-action-labels.csv",
-                          csv_file_scene_labels="./data/jester/annotations/jester-v1-scene-labels.csv",
+    d_train = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
+                          csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
+                          csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
+                          csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
                           clip_size=16,
                           nclips=1,
                           step_size=1,
@@ -220,10 +221,10 @@ if __name__ == '__main__':
                               num_workers=NUM_WORKERS,
                               pin_memory=PIN_MEMORY)
 
-    d_val = VideoFolder(root="/vision/group/video/scratch/jester/rgb",
-                        csv_file_input="./data/jester/annotations/jester-v1-validation-modified.csv",
-                        csv_file_action_labels="./data/jester/annotations/jester-v1-action-labels.csv",
-                        csv_file_scene_labels="./data/jester/annotations/jester-v1-scene-labels.csv",
+    d_val = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
+                        csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
+                        csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
+                        csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
                         clip_size=16,
                         nclips=1,
                         step_size=1,
@@ -240,7 +241,7 @@ if __name__ == '__main__':
     
     # Load pre-trained I3D model
     i3d = InceptionI3d(400, in_channels=3) # pre-trained model has 400 output classes
-    i3d.load_state_dict(torch.load('./models/rgb_imagenet.pt'))
+    i3d.load_state_dict(torch.load('/vision/u/rhsieh91/pytorch-i3d/models/rgb_imagenet.pt'))
     i3d.replace_logits(NUM_CLASSES) # replace final layer to work with new dataset
 
     # Set up optimizer and learning rate schedule

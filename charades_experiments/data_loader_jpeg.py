@@ -46,13 +46,13 @@ class VideoFolder(torch.utils.data.Dataset):
             img = self.transform(img)
             imgs.append(torch.unsqueeze(img, 0))
 
-        action_idxs = [self.action_classes_dict[a] for a in item.actions]
+        action_idx = self.action_classes_dict[item.action]
         scene_idx = self.scene_classes_dict[item.scene]
 
         # format data to torch
         data = torch.cat(imgs)
         data = data.permute(1, 0, 2, 3)
-        return (data, action_idxs, scene_idx)
+        return (data, action_idx, scene_idx)
 
     def __len__(self):
         return len(self.csv_data)
@@ -85,3 +85,29 @@ class VideoFolder(torch.utils.data.Dataset):
         frame_names = frame_names[offset:num_frames_necessary +
                                   offset:self.step_size]
         return frame_names
+
+if __name__ == "__main__":
+    transform = Compose([CenterCrop(84),
+                         ToTensor()
+                        ])
+    loader = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
+                         csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
+                         csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
+                         csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
+                         clip_size=16,
+                         nclips=1,
+                         step_size=1,
+                         is_val=False,
+                         transform=transform,
+                         loader=default_loader) 
+
+    train_loader = torch.utils.data.DataLoader(loader,
+                                               batch_size=10,
+                                               shuffle=False,
+                                               num_workers=0,
+                                               pin_memory=True)
+
+    for i, a in enumerate(train_loader):
+        if i == 10:
+             break
+    print("Size --> {}".format(a[0].size()))
