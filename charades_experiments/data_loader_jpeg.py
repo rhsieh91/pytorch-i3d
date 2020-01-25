@@ -58,11 +58,13 @@ class VideoFolder(torch.utils.data.Dataset):
         return len(self.csv_data)
 
     def get_frame_names(self, path):
+        # print('get_frame_names --> path = {}'.format(path))
         frame_names = []
         for ext in IMG_EXTENSIONS:
             frame_names.extend(glob.glob(os.path.join(path, "*" + ext)))
         frame_names = list(sorted(frame_names))
         num_frames = len(frame_names)
+        # print('num_frames = {}'.format(num_frames))
 
         # set number of necessary frames
         if self.nclips > -1:

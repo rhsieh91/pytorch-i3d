@@ -203,11 +203,11 @@ if __name__ == '__main__':
         ])
 
     # Load dataset
-    d_train = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
-                          csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
+    d_train = VideoFolder(root="/vision/group/Charades_single_action/single_action_rgb",
+                          csv_file_input="/vision/group/Charades_single_action/Charades_single_action_train.csv",
                           csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
                           csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
-                          clip_size=16,
+                          clip_size=64,
                           nclips=1,
                           step_size=1,
                           is_val=False,
@@ -221,11 +221,11 @@ if __name__ == '__main__':
                               num_workers=NUM_WORKERS,
                               pin_memory=PIN_MEMORY)
 
-    d_val = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
-                        csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
+    d_val = VideoFolder(root="/vision/group/Charades_single_action/single_action_rgb",
+                        csv_file_input="/vision/group/Charades_single_action/Charades_single_action_train.csv",
                         csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
                         csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
-                        clip_size=16,
+                        clip_size=64,
                         nclips=1,
                         step_size=1,
                         is_val=True,
