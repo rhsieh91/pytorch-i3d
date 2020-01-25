@@ -23,12 +23,14 @@ if __name__ == '__main__':
             # for a single sample
             if type(row['actions']) is not str:
                 continue
-            actions = row['actions'].split(';')
+            groups = row['actions'].split(';')
             id = row['id']
             scene = row['scene']
             objects = row['objects']
-            for j, action in enumerate(actions):
+            for j, group in enumerate(groups):
                 # split into new sample
                 id_new = id + '-' + str(j).zfill(2)
-                action = action.split()[0]
-                filewriter.writerow([id_new, action, scene, objects])
+                action, start, end = group.split()
+                # check if this action label is erroneous (time-start > time-end)
+                if float(start) < float(end):
+                    filewriter.writerow([id_new, action, scene, objects])
