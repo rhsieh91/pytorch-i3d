@@ -30,5 +30,7 @@ if __name__ == '__main__':
             for j, action in enumerate(actions):
                 # split into new sample
                 id_new = id + '-' + str(j).zfill(2)
-                action = action.split()[0]
-                filewriter.writerow([id_new, action, scene, objects])
+                action, start, end = group.split()
+                # check if this action label is erroneous (time-start > time-end)
+                if float(start) < float(end):
+                    filewriter.writerow([id_new, action, scene, objects])
