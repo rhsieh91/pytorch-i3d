@@ -14,7 +14,8 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor, Resize
 from torch.utils.tensorboard import SummaryWriter
 
-from data_loader_jpeg import *
+# from data_loader_jpeg import *
+from dataloader_charades import *
 
 import sys
 import argparse
@@ -146,26 +147,6 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
 
 
 if __name__ == '__main__':
-    # if len(sys.argv) < 4:
-    #   parser.print_usage()
-    #   sys.exit(1)
-
-    # # Hyperparameters
-    # USE_GPU = True
-    # NUM_CLASSES = 5 # number of classes in our modified Jester
-    # LR = args.lr
-    # BATCH_SIZE = args.bs
-    # EPOCHS = args.epochs 
-    # SAVE_DIR = 'checkpoints_lr' + str(args.lr) + '_bs' + str(args.bs) + '/' # TODO update dir to reflect date started
-    # NUM_WORKERS = 2
-    # SHUFFLE = True
-    # PIN_MEMORY = True
-    # 
-    # print('LR =', LR)
-    # print('BATCH_SIZE =', BATCH_SIZE)
-    # print('EPOCHS =', EPOCHS)
-    # print('SAVE_DIR =', SAVE_DIR)
-
     print('Starting...')
     now = datetime.datetime.now()
     checkpoints_dirname = './checkpoints-{}-{}-{}-{}-{}-{}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
@@ -203,17 +184,13 @@ if __name__ == '__main__':
         ])
 
     # Load dataset
-    d_train = VideoFolder(root="/vision/group/Charades_single_action/single_action_rgb",
-                          csv_file_input="/vision/group/Charades_single_action/Charades_single_action_train.csv",
-                          csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
-                          csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
-                          clip_size=64,
-                          nclips=1,
-                          step_size=1,
-                          is_val=False,
-                          transform=SPATIAL_TRANSFORM,
-                          loader=default_loader)
-
+    d_train = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
+                       split='train',
+                       labelpath='/vision/group/Charades/annotations/Charades_v1_train.csv',
+                       cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
+                       clip_size=32,
+                       is_val=False,
+                       transform=SPATIAL_TRANSFORM)
     print('Size of training set = {}'.format(len(d_train)))
     train_loader = DataLoader(d_train, 
                               batch_size=BATCH_SIZE,
@@ -221,17 +198,13 @@ if __name__ == '__main__':
                               num_workers=NUM_WORKERS,
                               pin_memory=PIN_MEMORY)
 
-    d_val = VideoFolder(root="/vision/group/Charades_single_action/single_action_rgb",
-                        csv_file_input="/vision/group/Charades_single_action/Charades_single_action_train.csv",
-                        csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
-                        csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
-                        clip_size=64,
-                        nclips=1,
-                        step_size=1,
-                        is_val=True,
-                        transform=SPATIAL_TRANSFORM,
-                        loader=default_loader)
-
+    d_val = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
+                       split='train',
+                       labelpath='/vision/group/Charades/annotations/Charades_v1_test.csv',
+                       cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
+                       clip_size=32,
+                       is_val=False,
+                       transform=SPATIAL_TRANSFORM)
     print('Size of validation set = {}'.format(len(d_val)))
     val_loader = DataLoader(d_val, 
                             batch_size=BATCH_SIZE,
