@@ -236,7 +236,7 @@ if __name__ == '__main__':
     transform = transforms.Compose([transforms.CenterCrop(84),
                                     transforms.ToTensor(),
                                     ])
-
+    import nonechucks as nc
     dataset = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
                        split='train',
                        labelpath='/vision/group/Charades/annotations/Charades_v1_train.csv',
@@ -244,14 +244,20 @@ if __name__ == '__main__':
                        clip_size=16,
                        is_val=False,
                        transform=transform)
-    # print(dataset.data)
+    dataset = nc.SafeDataset(dataset)
 
-    train_loader = torch.utils.data.DataLoader(dataset,
-                                               batch_size=8,
-                                               shuffle=True,
-                                               num_workers=0,
-                                               pin_memory=True)
-
+    # train_loader_1 = torch.utils.data.DataLoader(dataset,
+    #                                            batch_size=8,
+    #                                            shuffle=True,
+    #                                            num_workers=0,
+    #                                            pin_memory=True)
+    train_loader_2 = nc.SafeDataLoader(dataset,
+                                     batch_size=8,
+                                     shuffle=True,
+                                     num_workers=0,
+                                     pin_memory=True)
+    # pdb.set_trace()
+    
     for i, a in enumerate(train_loader):
         print(a[0].shape) # data
         print(a[1]) # action

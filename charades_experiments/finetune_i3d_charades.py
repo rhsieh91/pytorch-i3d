@@ -7,6 +7,7 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import nonechucks as nc
 
 from pytorch_i3d import InceptionI3d
 from torch.optim import lr_scheduler
@@ -19,9 +20,11 @@ from dataloader_charades import *
 
 import sys
 import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--bs', type=int, help='batch size')
+parser.add_argument('--cs', type=int, help='clip size')
 parser.add_argument('--epochs', type=int, help='number of epochs')
 args = parser.parse_args()
 
@@ -37,7 +40,7 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
     
     if torch.cuda.device_count() > 1:
         print('Multiple GPUs detected: {}'.format(torch.cuda.device_count()))
-        model = nn.DataParallel(model)
+        model = nn.DataParallel(model) # wrap model to parallelize multiple GPUs
     model = model.to(device=device) # move model parameters to CPU/GPU
     
     writer = SummaryWriter() # Tensorboard logging
@@ -59,10 +62,11 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
                 model.train(False)  # set model to eval mode
                 print('-'*10, 'VALIDATION', '-'*10)
 
-            num_correct = 0 # keep track of number of correct predictions
+            num_correct = 0
+            num_samples = 0 
 
-            # Iterate over data
             for data in dataloaders[phase]:
+                # pdb.set_trace()
                 inputs = data[0] # shape = B x C x T x H x W
                 inputs = inputs.to(device=device, dtype=torch.float32) # model expects inputs of float32
 
@@ -70,31 +74,28 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
                 if phase == 'train':
                     per_frame_logits = model(inputs)
                 else: 
-                    with torch.no_grad(): # disable autograd to reduce memory usage
+                    with torch.no_grad(): # disable autograd to reduce memory usage for validation phase
                         per_frame_logits = model(inputs)
 
                 # Due to the strides and max-pooling in I3D, it temporally downsamples the video by a factor of 8
                 # so we need to upsample (F.interpolate) to get per-frame predictions
                 # ALTERNATIVE: Take the average to get per-clip prediction
-                per_frame_logits = F.interpolate(per_frame_logits, size=inputs.shape[2], mode='linear') # output shape = B x NUM_CLASSES x T
+                per_frame_logits = F.interpolate(per_frame_logits, size=inputs.shape[2], mode='linear') # shape = B x NUM_CLASSES x T
 
-                # Average across frames to get a single prediction per clip
-                mean_frame_logits = torch.mean(per_frame_logits, dim=2) # shape = B x NUM_CLASSES, each row is a one-hot vector
-                mean_frame_logits = mean_frame_logits.to(device=device) # might already be loaded in CUDA but adding this line just in case
-                _, pred_class_idx = torch.max(mean_frame_logits, dim=1) # shape = B, values are indices
+                # Average or max across frames to get a single prediction per clip
+                # pred_frame_logits = torch.mean(per_frame_logits, dim=2) # shape = B x NUM_CLASSES
+                pred_frame_logits = torch.max(per_frame_logits, dim=2)[0] # shape = B x NUM_CLASSES
+                _, pred_class_idx = torch.max(pred_frame_logits, dim=1) # shape = B (values are indices from 0:NUM_CLASSES-1)
 
                 # Ground truth labels
                 class_idx = data[1] # shape = B
                 class_idx = class_idx.to(device=device)
                 num_correct += torch.sum(pred_class_idx == class_idx)
+                num_samples += inputs.shape[0]
 
                 # Backward pass only if in 'train' mode
                 if phase == 'train':
-                    # Compute classification loss
-                    # a_weight = torch.Tensor([28.6, 29.4, 27.7, 28.6, 1.16])
-                    # a_weight = a_weight.to(device=device)
-                    # loss = F.cross_entropy(mean_frame_logits, class_idx, weight=a_weight) 
-                    loss = F.cross_entropy(mean_frame_logits, class_idx)
+                    loss = F.cross_entropy(pred_frame_logits, class_idx)
                     writer.add_scalar('Loss/train', loss, n_iter)
                     
                     optimizer.zero_grad()
@@ -103,13 +104,12 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
 
                     if n_iter % 10 == 0:
                         print('{}, loss = {}'.format(phase, loss))
-
                     n_iter += 1
 
             # Log train/val accuracy
-            accuracy = float(num_correct) / len(dataloaders[phase].dataset)
+            accuracy = float(num_correct) / float(num_samples)
             print('num_correct = {}'.format(num_correct))
-            print('size of dataset = {}'.format(len(dataloaders[phase].dataset)))
+            print('num_samples = {}'.format(num_samples))
             print('{}, accuracy = {}'.format(phase, accuracy))
 
             if phase == 'train':
@@ -126,7 +126,7 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
                     save_checkpoint(model, optimizer, loss, save_dir, e, n_iter)
 
         if lr_sched is not None:
-            lr_sched.step() # decay learning rate according 
+            lr_sched.step() # decay learning rate
 
     writer.close()  
 
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     now = datetime.datetime.now()
     checkpoints_dirname = './checkpoints-{}-{}-{}-{}-{}-{}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
     
-    if len(sys.argv) < 4:
+    if len(sys.argv) < 5:
         parser.print_usage()
         sys.exit(1)
 
@@ -160,6 +160,7 @@ if __name__ == '__main__':
     NUM_CLASSES = 157
     LR = args.lr
     BATCH_SIZE = args.bs
+    CLIP_SIZE = args.cs
     EPOCHS = args.epochs 
     SAVE_DIR = checkpoints_dirname
     NUM_WORKERS = 2
@@ -168,6 +169,7 @@ if __name__ == '__main__':
     
     print('LR =', LR)
     print('BATCH_SIZE =', BATCH_SIZE)
+    print('CLIP_SIZE =', CLIP_SIZE)
     print('EPOCHS =', EPOCHS)
     print('SAVE_DIR =', SAVE_DIR)
 
@@ -188,29 +190,31 @@ if __name__ == '__main__':
                        split='train',
                        labelpath='/vision/group/Charades/annotations/Charades_v1_train.csv',
                        cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
-                       clip_size=32,
+                       clip_size=CLIP_SIZE,
                        is_val=False,
                        transform=SPATIAL_TRANSFORM)
+    d_train =  nc.SafeDataset(d_train)
     print('Size of training set = {}'.format(len(d_train)))
-    train_loader = DataLoader(d_train, 
-                              batch_size=BATCH_SIZE,
-                              shuffle=SHUFFLE, 
-                              num_workers=NUM_WORKERS,
-                              pin_memory=PIN_MEMORY)
+    train_loader = nc.SafeDataLoader(d_train, 
+                                    batch_size=BATCH_SIZE,
+                                    shuffle=SHUFFLE, 
+                                    num_workers=NUM_WORKERS,
+                                    pin_memory=PIN_MEMORY)
 
     d_val = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
                        split='train',
                        labelpath='/vision/group/Charades/annotations/Charades_v1_test.csv',
                        cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
-                       clip_size=32,
-                       is_val=False,
+                       clip_size=CLIP_SIZE,
+                       is_val=True,
                        transform=SPATIAL_TRANSFORM)
+    d_val = nc.SafeDataset(d_val)
     print('Size of validation set = {}'.format(len(d_val)))
-    val_loader = DataLoader(d_val, 
-                            batch_size=BATCH_SIZE,
-                            shuffle=SHUFFLE, 
-                            num_workers=NUM_WORKERS,
-                            pin_memory=PIN_MEMORY)
+    val_loader = nc.SafeDataLoader(d_val, 
+                                   batch_size=BATCH_SIZE,
+                                   shuffle=SHUFFLE, 
+                                   num_workers=NUM_WORKERS,
+                                   pin_memory=PIN_MEMORY)
     
     # Load pre-trained I3D model
     i3d = InceptionI3d(400, in_channels=3) # pre-trained model has 400 output classes
