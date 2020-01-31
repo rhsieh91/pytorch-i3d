@@ -88,28 +88,3 @@ class VideoFolder(torch.utils.data.Dataset):
                                   offset:self.step_size]
         return frame_names
 
-if __name__ == "__main__":
-    transform = Compose([CenterCrop(84),
-                         ToTensor()
-                        ])
-    loader = VideoFolder(root="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/single_action_rgb",
-                         csv_file_input="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_single_action_train.csv",
-                         csv_file_action_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_actions.csv",
-                         csv_file_scene_labels="/vision2/u/samkwong/pytorch-i3d/charades_experiments/data/annotations/Charades_v1_scenes.csv",
-                         clip_size=16,
-                         nclips=1,
-                         step_size=1,
-                         is_val=False,
-                         transform=transform,
-                         loader=default_loader) 
-
-    train_loader = torch.utils.data.DataLoader(loader,
-                                               batch_size=10,
-                                               shuffle=False,
-                                               num_workers=0,
-                                               pin_memory=True)
-
-    for i, a in enumerate(train_loader):
-        if i == 10:
-             break
-    print("Size --> {}".format(a[0].size()))
