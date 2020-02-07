@@ -7,11 +7,11 @@ ListDataJpeg = namedtuple('ListDataJpeg', ['id', 'actions', 'scene', 'path'])
 
 class JpegDataset(object):
 
-    def __init__(self, csv_path_input, csv_path_action_labels, csv_path_scene_labels, data_root):
+    def __init__(self, csv_path_input, csv_path_actions_labels, csv_path_scene_labels, data_root):
         self.csv_data = self.read_csv_input(csv_path_input, data_root)
-        self.action_classes = self.read_csv_labels(csv_path_action_labels)
+        self.actions_classes = self.read_csv_labels(csv_path_actions_labels)
         self.scene_classes = self.read_csv_labels(csv_path_scene_labels)
-        self.action_classes_dict = self.get_two_way_dict(self.action_classes)
+        self.actions_classes_dict = self.get_two_way_dict(self.actions_classes)
         self.scene_classes_dict = self.get_two_way_dict(self.scene_classes)
 
     def read_csv_input(self, csv_path, data_root):
