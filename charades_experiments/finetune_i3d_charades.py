@@ -189,7 +189,7 @@ if __name__ == '__main__':
     d_train = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
                        split='train',
                        labelpath='/vision/group/Charades/annotations/Charades_v1_train.csv',
-                       cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
+                       cachedir=None, #'/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
                        clip_size=CLIP_SIZE,
                        is_val=False,
                        transform=SPATIAL_TRANSFORM)
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     d_val = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
                        split='train',
                        labelpath='/vision/group/Charades/annotations/Charades_v1_test.csv',
-                       cachedir='/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
+                       cachedir=None, #'/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
                        clip_size=CLIP_SIZE,
                        is_val=True,
                        transform=SPATIAL_TRANSFORM)
