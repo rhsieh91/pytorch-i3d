@@ -17,7 +17,7 @@ class JpegDataset(object):
     def read_csv_input(self, csv_path, data_root):
         csv_data = []
         with open(csv_path) as csvfile:
-            next(csvfile) # skip labels row
+            #next(csvfile) # skip labels row
             reader = csv.DictReader(csvfile) # data/Charades_v1_train.csv
             for row in reader:
                 actions = [b for a in row['actions'].split(';') for b in a.split() if 'c' in b]
