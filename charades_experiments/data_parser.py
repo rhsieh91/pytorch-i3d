@@ -20,7 +20,7 @@ class JpegDataset(object):
             #next(csvfile) # skip labels row
             reader = csv.DictReader(csvfile) # data/Charades_v1_train.csv
             for row in reader:
-                actions = [b for a in row['actions'].split(';') for b in a.split() if 'c' in b]
+                actions = tuple([b for a in row['actions'].split(';') for b in a.split() if 'c' in b])
                 item = ListDataJpeg(row['id'],
                                     actions,
                                     row['scene'],
