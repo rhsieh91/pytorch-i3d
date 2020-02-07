@@ -3,7 +3,7 @@ import csv
 
 from collections import namedtuple
 
-ListDataJpeg = namedtuple('ListDataJpeg', ['id', 'action', 'scene', 'path'])
+ListDataJpeg = namedtuple('ListDataJpeg', ['id', 'actions', 'scene', 'path'])
 
 class JpegDataset(object):
 
@@ -17,12 +17,14 @@ class JpegDataset(object):
     def read_csv_input(self, csv_path, data_root):
         csv_data = []
         with open(csv_path) as csvfile:
-            csv_reader = csv.reader(csvfile, delimiter=',')
-            for row in csv_reader:
-                item = ListDataJpeg(row[0],
-                                    row[1],
-                                    row[2],
-                                    os.path.join(data_root, row[0])
+			next(csvfile) # skip labels row
+        	reader = csv.DictReader(csvfile) # data/Charades_v1_train.csv
+            for row in reader:
+                actions = [b for a in row['actions'].split(';') for b in a.split() if 'c' in b]
+                item = ListDataJpeg(row['id'],
+                                    actions,
+                                    row['scene'],
+                                    os.path.join(data_root, row['id'])    
                                     )
                 csv_data.append(item)
         return csv_data
