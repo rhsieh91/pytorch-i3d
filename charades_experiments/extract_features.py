@@ -40,20 +40,28 @@ def run(max_steps=64e3, mode='rgb', root='/vision/group/Charades_RGB/Charades_v1
     # setup dataset
     test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
 
-    print('Making dataset...')
-    if os.path.exists('./data/charades_dataset_original.pickle'):
-        pickle_in = open('./data/charades_dataset_original.pickle')
+    print('Making train dataset...')
+    if os.path.exists('./data/charades_train_dataset_original.pickle'):
+        pickle_in = open('./data/charades_train_dataset_original.pickle')
         dataset = pickle.load(pickle_in)
     else:
         dataset = Dataset(split, 'training', root, mode, test_transforms, num=-1, save_dir=save_dir)
         pickle_out = open('./data/charades_dataset_original.pickle', 'wb')
         pickle.dump(dataset, pickle_out)
         pickle_out.close()
-    print('Made dataset.')
-
+    print('Finished making train dataset.')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
-    val_dataset = Dataset(split, 'testing', root, mode, test_transforms, num=-1, save_dir=save_dir)
+    print('Making validation dataset...')
+    if os.path.exists('./data/charades_val_dataset_original.pickle'):
+        pickle_in = open('./data/charades_val_dataset_original.pickle')
+        val_dataset = pickle.load(pickle_in)
+    else:
+        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, num=-1, save_dir=save_dir)
+        pickle_out = open('./data/charades_val_dataset_original.pickle', 'wb')
+        pickle.dump(val_dataset, pickle_out)
+        pickle_out.close()
+    print('Finished making val dataset.')
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)    
 
     dataloaders = {'train': dataloader, 'val': val_dataloader}
