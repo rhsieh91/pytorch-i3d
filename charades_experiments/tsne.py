@@ -26,17 +26,17 @@ from collections import OrderedDict
 NUM_ACTIONS = 5
 NUM_SCENES = 2
 NUM_FEATURES = 1024
-BATCH_SIZE = 128
+BATCH_SIZE = 1
 
 """ baseline i3d params """
 IS_BASELINE = True # use baseline i3d
 DATA_PARALLEL = True # model trained using nn.DataParallel
-CHECKPOINT_PATH = '/vision/u/rhsieh91/pytorch-i3d/checkpoints-2019-12-9-22-36-12/22085238.pt' # epoch 22
-FEATURES_PATH = '/vision/u/samkwong/pytorch-i3d/input_features_i3d_epoch22.npy'
-FEATURES_SAVE_PATH = 'input_features_i3d_epoch22' # features will only be saved if FEATURES_PATH is defined
-ACTIONS_PATH = '/vision/u/samkwong/pytorch-i3d/input_actions_i3d_epoch22.npy'
-ACTIONS_SAVE_PATH = 'input_actions_i3d_epoch22'
-TSNE_ACTION_SAVE_PATH = 'tsne_i3d_action_jester_epoch22.png'
+CHECKPOINT_PATH = None #'/vision/u/rhsieh91/pytorch-i3d/checkpoints-2019-12-9-22-36-12/22085238.pt' # epoch 22
+FEATURES_PATH = '/vision/u/samkwong/pytorch-i3d/charades_experiments/i3d_extracted_features.npy'
+FEATURES_SAVE_PATH = 'i3d_extracted_features' # features will only be saved if FEATURES_PATH is defined
+ACTIONS_PATH = None #'/vision/u/samkwong/pytorch-i3d/input_actions_i3d_epoch22.npy'
+ACTIONS_SAVE_PATH = None #'input_actions_i3d_epoch22'
+TSNE_ACTION_SAVE_PATH = None #'tsne_i3d_action_jester_epoch22.png'
 
 """ sife params """
 #IS_BASELINE = False # use sife
@@ -92,8 +92,12 @@ def extract_data(model, test_loader):
                 features = model.extract_features(inputs)
             else:
                 features = model.backbone.extract_features(inputs) # using SIFE with I3D backbone
-
         features = features.squeeze()
+        features = features.flatten()
+        print(features.shape)
+        print(features)
+        features = features.reshape(BATCH_SIZE, 1024)
+        print(features.shape)
         features = features.cpu().detach().numpy()
         action_idxs = action_idxs.squeeze().cpu().detach().numpy()
         if not IS_BASELINE:
@@ -119,11 +123,11 @@ def get_test_loader(model):
         ])
     
     # Load dataset
-    vf = VideoFolder(root="/vision/group/video/scratch/jester/rgb",
-                          csv_file_input="./data/jester/annotations/jester-v1-train-modified.csv",
-                          csv_file_action_labels="./data/jester/annotations/jester-v1-action-labels.csv",
-                          csv_file_scene_labels="./data/jester/annotations/jester-v1-scene-labels.csv",
-                          clip_size=16,
+    vf = VideoFolder(root="/vision/group/Charades_single_action/single_action_rgb",
+                          csv_file_input="/vision/group/Charades_single_action/Charades_single_action_train.csv",
+                          csv_file_action_labels="/vision/group/Charades_single_action/Charades_v1_actions.csv",
+                          csv_file_scene_labels="/vision/group/Charades_single_action/Charades_v1_scenes.csv",
+                          clip_size=64,
                           nclips=1,
                           step_size=1,
                           is_val=True, # True means don't randomly offset clips (i.e. don't augment dataset)
@@ -148,41 +152,48 @@ def plot_tsne(inputs_truths, colors, labels, save_path):
 
 # ------------------------------------------------------------
 
-# Either load features from disk or compute them
-if FEATURES_PATH:
-    inputs_features = np.load(FEATURES_PATH)
-    inputs_actions = np.load(ACTIONS_PATH)
-    if not IS_BASELINE:
-        inputs_scenes = np.load(SCENES_PATH)
-    print('Loaded saved features and ground truth labels')
-else:
-    i3d = InceptionI3d(400, in_channels=3)
-    if IS_BASELINE:
-        model = i3d
-        model.replace_logits(NUM_ACTIONS)
-    else:
-        model = SIFE(backbone=i3d, num_features=NUM_FEATURES, num_actions=NUM_ACTIONS, num_scenes=NUM_SCENES)
+i3d = InceptionI3d(400, in_channels=3)
+model = i3d
+model.replace_logits(NUM_ACTIONS)
 
-    load_checkpoint()
-    test_loader = get_test_loader(model)
-    inputs_features, inputs_actions, inputs_scenes = extract_data(model, test_loader)
+test_loader = get_test_loader(model)
+inputs_features, inputs_actions, inputs_scenes = extract_data(model, test_loader)
 
-# Calculate TSNE
-print("Starting TSNE")
-features_embedded = TSNE(n_jobs=8).fit_transform(inputs_features) # MultiCoreTSNE automatically uses n_components=2
-print("Finished TSNE")
-print('feautures_embedded shape = {}'.format(features_embedded.shape))
-
-# Plot TSNE for action
-print("Plotting action TSNE")
-action_colors = ['r', 'g', 'b', 'c', 'grey'] # create color list with num elements equal to num action labels 
-action_labels = ['swiping-left', 'swiping-right', 'swiping-down', 'swiping-up', 'other']
-plot_tsne(inputs_actions, action_colors, action_labels, TSNE_ACTION_SAVE_PATH)
-
-if not IS_BASELINE:
-    # Plot TSNE for scene
-    print("Plotting scene TSNE")
-    scene_colors = ['orange', 'grey'] # create color list with num elements equal to num scene labels
-    scene_labels = ['swiping', 'other']
-    plot_tsne(inputs_scenes, scene_colors, scene_labels, TSNE_SCENE_SAVE_PATH)
-    
+# # Either load features from disk or compute them
+# if FEATURES_PATH:
+#     inputs_features = np.load(FEATURES_PATH)
+#     inputs_actions = np.load(ACTIONS_PATH)
+#     if not IS_BASELINE:
+#         inputs_scenes = np.load(SCENES_PATH)
+#     print('Loaded saved features and ground truth labels')
+# else:
+#     i3d = InceptionI3d(400, in_channels=3)
+#     if IS_BASELINE:
+#         model = i3d
+#         model.replace_logits(NUM_ACTIONS)
+#     else:
+#         model = SIFE(backbone=i3d, num_features=NUM_FEATURES, num_actions=NUM_ACTIONS, num_scenes=NUM_SCENES)
+# 
+#     load_checkpoint()
+#     test_loader = get_test_loader(model)
+#     inputs_features, inputs_actions, inputs_scenes = extract_data(model, test_loader)
+# 
+# # Calculate TSNE
+# print("Starting TSNE")
+# features_embedded = TSNE(n_jobs=8).fit_transform(inputs_features) # MultiCoreTSNE automatically uses n_components=2
+# print("Finished TSNE")
+# print('feautures_embedded shape = {}'.format(features_embedded.shape))
+# 
+# # Plot TSNE for action
+# print("Plotting action TSNE")
+# action_colors = ['r', 'g', 'b', 'c', 'grey'] # create color list with num elements equal to num action labels 
+# action_labels = ['swiping-left', 'swiping-right', 'swiping-down', 'swiping-up', 'other']
+# plot_tsne(inputs_actions, action_colors, action_labels, TSNE_ACTION_SAVE_PATH)
+# 
+# if not IS_BASELINE:
+#     # Plot TSNE for scene
+#     print("Plotting scene TSNE")
+#     scene_colors = ['orange', 'grey'] # create color list with num elements equal to num scene labels
+#     scene_labels = ['swiping', 'other']
+#     plot_tsne(inputs_scenes, scene_colors, scene_labels, TSNE_SCENE_SAVE_PATH)
+#     

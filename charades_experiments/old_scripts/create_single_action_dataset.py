@@ -1,4 +1,5 @@
-# Splits Charades RGBs into single-action samples, in place
+# Splits Charades RGBs into single-action samples and copies into a target directory
+# Contributor: Samuel Kwong
 
 import cv2
 import argparse
@@ -9,17 +10,13 @@ import math
 import shutil
 
 if __name__ == '__main__': 
-    
     parser = argparse.ArgumentParser()
-    
     parser.add_argument('--csv_path', type=str) # <relative-path>/Charades_v1_train.csv
     parser.add_argument('--input_root', type=str) # directory containing 24FPS RGBs
     parser.add_argument('--target_root', type=str) # directory to save single-action samples
-
     args = parser.parse_args()
 
     df = pd.read_csv(args.csv_path)
-
     NUM_FPS = 24
     for i, row in df.iterrows():
         # for a single sample
