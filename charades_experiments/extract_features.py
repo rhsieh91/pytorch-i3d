@@ -1,3 +1,6 @@
+# Contributer: piergiaj
+# Modified by Samuel Kwong
+
 import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
 import sys
@@ -11,7 +14,7 @@ parser.add_argument('-gpu', type=str)
 parser.add_argument('-save_dir', type=str)
 
 args = parser.parse_args()
-os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+os.environ["CUDA_VISIBLE_DEVICES"] = 'True'
 
 import torch
 import torch.nn as nn
@@ -30,13 +33,24 @@ import numpy as np
 from pytorch_i3d import InceptionI3d
 
 from charades_dataset_full import Charades as Dataset
+import pickle
 
 
-def run(max_steps=64e3, mode='rgb', root='/ssd2/charades/Charades_v1_rgb', split='charades/charades.json', batch_size=1, load_model='', save_dir=''):
+def run(max_steps=64e3, mode='rgb', root='/vision/group/Charades_RGB/Charades_v1_rgb', split='./data/annotations/charades.json', batch_size=1, load_model='', save_dir='./features_charades_i3d'):
     # setup dataset
     test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
 
-    dataset = Dataset(split, 'training', root, mode, test_transforms, num=-1, save_dir=save_dir)
+    print('Making dataset...')
+    if os.path.exists('./data/charades_dataset_original.pickle'):
+        pickle_in = open('./data/charades_dataset_original.pickle')
+        dataset = pickle.load(pickle_in)
+    else:
+        dataset = Dataset(split, 'training', root, mode, test_transforms, num=-1, save_dir=save_dir)
+        pickle_out = open('./data/charades_dataset_original.pickle', 'wb')
+        pickle.dump(dataset, pickle_out)
+        pickle_out.close()
+    print('Made dataset.')
+
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
 
     val_dataset = Dataset(split, 'testing', root, mode, test_transforms, num=-1, save_dir=save_dir)
@@ -87,4 +101,5 @@ def run(max_steps=64e3, mode='rgb', root='/ssd2/charades/Charades_v1_rgb', split
 
 if __name__ == '__main__':
     # need to add argparse
-    run(mode=args.mode, root=args.root, load_model=args.load_model, save_dir=args.save_dir)
+    #run(mode=args.mode, root=args.root, load_model=args.load_model, save_dir=args.save_dir)
+    run(mode='rgb', root='/vision/group/Charades_RGB/Charades_v1_rgb', split='./data/annotations/charades.json', batch_size=1, load_model='./models/rgb_imagenet.pt', save_dir='./features_charades_i3d')
