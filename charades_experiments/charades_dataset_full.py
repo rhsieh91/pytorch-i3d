@@ -131,9 +131,9 @@ class Charades(data_utl.Dataset):
             return 0, 0, vid
 
         if self.mode == 'rgb':
-            imgs = load_rgb_frames(self.root, vid, 0, nf, stride)
+            imgs = load_rgb_frames(self.root, vid, 1, nf, stride)
         else:
-            imgs = load_flow_frames(self.root, vid, 0, nf, stride)
+            imgs = load_flow_frames(self.root, vid, 1, nf, stride)
 
         imgs = self.transforms(imgs)
 
