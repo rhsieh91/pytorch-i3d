@@ -1,3 +1,6 @@
+# Original contributor: piergiaj
+# Sampling rate modifications by Samuel Kwong
+
 import torch
 import torch.utils.data as data_utl
 from torch.utils.data.dataloader import default_collate
@@ -65,9 +68,11 @@ def make_dataset(split_file, split, root, mode, num_classes=157):
 
     i = 0
     for vid in data.keys():
+        if (i % 500 == 0):
+            print('{}/{}'.format(i, len(data.keys())))
         if data[vid]['subset'] != split:
             continue
-
+        
         if not os.path.exists(os.path.join(root, vid)):
             continue
         num_frames = len(os.listdir(os.path.join(root, vid)))
