@@ -33,14 +33,14 @@ def load_rgb_frames(image_dir, vid, start, num):
     for i in range(start, start+num):
         try:
             img = cv2.imread(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))[:, :, [2, 1, 0]]
+            w,h,c = img.shape
+            if w < 226 or h < 226:
+                d = 226.-min(w,h)
+                sc = 1+d/min(w,h)
+                img = cv2.resize(img,dsize=(0,0),fx=sc,fy=sc)
+            img = (img/255.)*2 - 1
         except: # duplicate last frame
             img = frames[-1]
-        w,h,c = img.shape
-        if w < 226 or h < 226:
-            d = 226.-min(w,h)
-            sc = 1+d/min(w,h)
-            img = cv2.resize(img,dsize=(0,0),fx=sc,fy=sc)
-        img = (img/255.)*2 - 1
         frames.append(img)
     return np.asarray(frames, dtype=np.float32)
 
