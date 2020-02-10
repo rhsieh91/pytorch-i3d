@@ -28,9 +28,9 @@ def video_to_tensor(pic):
     return torch.from_numpy(pic.transpose([3,0,1,2]))
 
 
-def load_rgb_frames(image_dir, vid, start, num):
+def load_rgb_frames(image_dir, vid, start, num, stride):
     frames = []
-    for i in range(start, start+num):
+    for i in range(start, start+num, stride):
         try:
             img = cv2.imread(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))[:, :, [2, 1, 0]]
             w,h,c = img.shape
@@ -82,23 +82,27 @@ def make_dataset(split_file, split, root, mode, num_classes=157):
         # Sample clips with temporal stride of 4, having input clips spanning total of 125 frames (~5.2 seconds)
         # Follows approach from Long-Term Feature Banks for Detailed Video Understanding (https://arxiv.org/pdf/1812.05038.pdf)
         
-        num_span_frames = 125 * 4 # upper boundary to grab from original clip (duplicate last frame if clip is too short)
+        stride = 4
+        num_span_frames = 125
         num_avail_frames = len(os.listdir(os.path.join(root, vid)))
         if mode == 'flow':
             num_span_frames = num_span_frames//2
             
-        label = np.zeros((num_classes,num_span_frames), np.float32)
-        last_label = np.zeros((num_classes,num_span_frames), np.float32)
+        label = np.zeros((num_classes, num_span_frames), np.float32)
 
         fps = num_avail_frames/data[vid]['duration'] # we use 24fps as provided by Charades website
         for ann in data[vid]['actions']:
-            for fr in range(0,num_span_frames,4): # sample every 4 frames
+            most_recent = None
+            for fr in range(0, num_span_frames*stride, stride): # sample every 4 frames
                 if fr < num_avail_frames:
                     if fr/fps > ann[1] and fr/fps < ann[2]:
-                        label[ann[0], fr] = 1 # binary classification
+                        label[ann[0], int(fr/stride)] = 1 # binary classification
+                        most_recent = 1
+                    else:
+                        most_recent = 0
                 else: # repeat last frame
-                    label[ann[0], fr] = 1 # binary classification
-        dataset.append((vid, label, num_span_frames))
+                    label[ann[0], int(fr/stride)] = most_recent # binary classification
+        dataset.append((vid, label, num_span_frames*stride, stride))
     
     return dataset
 
@@ -122,14 +126,14 @@ class Charades(data_utl.Dataset):
         Returns:
             tuple: (image, target) where target is class_index of the target class.
         """
-        vid, label, nf = self.data[index]
+        vid, label, nf, stride = self.data[index]
         if os.path.exists(os.path.join(self.save_dir, vid+'.npy')):
             return 0, 0, vid
 
         if self.mode == 'rgb':
-            imgs = load_rgb_frames(self.root, vid, 1, nf)
+            imgs = load_rgb_frames(self.root, vid, 0, nf, stride)
         else:
-            imgs = load_flow_frames(self.root, vid, 1, nf)
+            imgs = load_flow_frames(self.root, vid, 0, nf, stride)
 
         imgs = self.transforms(imgs)
 
