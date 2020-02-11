@@ -1,5 +1,6 @@
 import os
-import pdb
+import sys
+import argparse
 import datetime
 import torch
 import torchvision
@@ -7,19 +8,14 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import nonechucks as nc
+import videotransforms
 
 from pytorch_i3d import InceptionI3d
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, ToTensor, Resize
+from torchvision import transforms 
 from torch.utils.tensorboard import SummaryWriter
-
-# from data_loader_jpeg import *
-from dataloader_charades import *
-
-import sys
-import argparse
+from charades_dataset_full import Charades as Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
@@ -29,7 +25,7 @@ parser.add_argument('--epochs', type=int, help='number of epochs')
 args = parser.parse_args()
 
 
-def train(model, optimizer, train_loader, test_loader, num_classes, epochs, 
+def train(model, optimizer, dataloaders, num_classes, epochs, 
           save_dir='', use_gpu=False, lr_sched=None):
     # Enable GPU if available
     if use_gpu and torch.cuda.is_available():
@@ -66,7 +62,6 @@ def train(model, optimizer, train_loader, test_loader, num_classes, epochs,
             num_samples = 0 
 
             for data in dataloaders[phase]:
-                # pdb.set_trace()
                 inputs = data[0] # shape = B x C x T x H x W
                 inputs = inputs.to(device=device, dtype=torch.float32) # model expects inputs of float32
 
@@ -158,6 +153,7 @@ if __name__ == '__main__':
     # Hyperparameters
     USE_GPU = True
     NUM_CLASSES = 157
+    ROOT = '/vision/group/Charades_RGB/Charades_v1_rgb'
     LR = args.lr
     BATCH_SIZE = args.bs
     CLIP_SIZE = args.cs
@@ -180,42 +176,20 @@ if __name__ == '__main__':
         f.write('LR = {}\nBATCH_SIZE = {}\nEPOCHS = {}\n'.format(LR, BATCH_SIZE, EPOCHS))
 
     # Transforms
-    SPATIAL_TRANSFORM = Compose([
-        Resize((224, 224)),
-        ToTensor()
-        ])
+    train_transforms = transforms.Compose([videotransforms.RandomCrop(224),
+                                            videotransforms.RandomHorizontalFlip(),
+                                            ])
+    test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
 
-    # Load dataset
-    d_train = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
-                       split='train',
-                       labelpath='/vision/group/Charades/annotations/Charades_v1_train.csv',
-                       cachedir=None, #'/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
-                       clip_size=CLIP_SIZE,
-                       is_val=False,
-                       transform=SPATIAL_TRANSFORM)
-    d_train =  nc.SafeDataset(d_train)
-    print('Size of training set = {}'.format(len(d_train)))
-    train_loader = nc.SafeDataLoader(d_train, 
-                                    batch_size=BATCH_SIZE,
-                                    shuffle=SHUFFLE, 
-                                    num_workers=NUM_WORKERS,
-                                    pin_memory=PIN_MEMORY)
+    # Datasets and Dataloaders
+    train_dataset = Dataset(train_split, 'training', root, mode, train_transforms)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=36, pin_memory=True)
 
-    d_val = Charades(root='/vision/group/Charades_RGB/Charades_v1_rgb',
-                       split='train',
-                       labelpath='/vision/group/Charades/annotations/Charades_v1_test.csv',
-                       cachedir=None, #'/vision2/u/rhsieh91/pytorch-i3d/charades_experiments/charades_cache',
-                       clip_size=CLIP_SIZE,
-                       is_val=True,
-                       transform=SPATIAL_TRANSFORM)
-    d_val = nc.SafeDataset(d_val)
-    print('Size of validation set = {}'.format(len(d_val)))
-    val_loader = nc.SafeDataLoader(d_val, 
-                                   batch_size=BATCH_SIZE,
-                                   shuffle=SHUFFLE, 
-                                   num_workers=NUM_WORKERS,
-                                   pin_memory=PIN_MEMORY)
-    
+    val_dataset = Dataset(train_split, 'testing', root, mode, test_transforms)
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=36, pin_memory=True)    
+
+    dataloaders = {'train': train_dataloader, 'val': val_dataloader}
+
     # Load pre-trained I3D model
     i3d = InceptionI3d(400, in_channels=3) # pre-trained model has 400 output classes
     i3d.load_state_dict(torch.load('/vision/u/rhsieh91/pytorch-i3d/models/rgb_imagenet.pt'))
@@ -226,5 +200,5 @@ if __name__ == '__main__':
     lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20], gamma=0.1) # decay learning rate by gamma at epoch 10 and 20
 
     # Start training
-    train(i3d, optimizer, train_loader, val_loader, num_classes=NUM_CLASSES, epochs=EPOCHS, 
+    train(i3d, optimizer, dataloaders, num_classes=NUM_CLASSES, epochs=EPOCHS, 
           save_dir=SAVE_DIR, use_gpu=USE_GPU, lr_sched=lr_sched)
