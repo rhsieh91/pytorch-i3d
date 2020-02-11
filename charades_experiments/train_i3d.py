@@ -7,9 +7,10 @@ os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,3'
 import sys
 import argparse
 import pickle 
+import datetime
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-save_model', type=str)
+parser.add_argument('-save_dir', type=str)
 parser.add_argument('-epochs', type=int)
 args = parser.parse_args()
 
@@ -30,8 +31,21 @@ from charades_dataset_full import Charades as Dataset
 
 from torch.utils.tensorboard import SummaryWriter
 
+def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
+    """Saves checkpoint of model weights during training."""
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
-def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_model='', num_epochs=150):
+    save_path = save_dir + str(epoch).zfill(2) + str(n_iter).zfill(6) + '.pt'
+    torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss
+                },
+                save_path)
+
+def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -94,8 +108,8 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     steps = 0
     # train it
     for epoch in range(num_epochs):
-        print('Epoch {}/{}'.format(epoch, num_epochs))
-        print('-' * 10)
+        print('-'*10, 'EPOCH {}/{}'.format(epoch, num_epochs), '-'*10)
+        print('-' * 30)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
@@ -110,7 +124,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             optimizer.zero_grad()
             
             # Iterate over data.
-            print('About to start dataloader...')
+            print('Entering data loading...')
             for data in dataloaders[phase]:
                 # get the inputs
                 inputs, labels, vid = data
@@ -142,10 +156,14 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                     if steps % 10 == 0:
                         print('Step {} {} loss: {:.4f}'.format(steps, phase, loss.data))
                         # save model
-                        if not os.path.exists(save_model):
-                            os.makedirs(save_model)
-                        torch.save(i3d.module.state_dict(), save_model+str(steps).zfill(6)+'.pt')
+                        # TODO: only save best accuracy step
+
+                        #save_checkpoint(model, optimizer, loss, save_dir, epoch, steps)
+                        if not os.path.exists(save_dir):
+                            os.makedirs(save_dir)
+                        torch.save(i3d.module.state_dict(), save_dir+str(steps).zfill(6)+'.pt')
             if phase == 'val':
+                # TODO: only save best val accuracy step
                 writer.add_scalar('Validation loss', loss.data, steps)
                 print('{} loss: {:.4f}'.format(phase, loss.data))
     
@@ -153,4 +171,15 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     
 
 if __name__ == '__main__':
-    run(mode='rgb', root='/vision/group/Charades_RGB/Charades_v1_rgb', save_model='./checkpoints/')
+    print('Starting...')
+    now = datetime.datetime.now()
+    LR = 0.1
+    BATCH_SIZE = 8
+    EPOCHS = 150
+    SAVE_DIR = './checkpoints-{}-{}-{}-{}-{}-{}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
+    if not os.path.exists(SAVE_DIR):
+        os.makedirs(SAVE_DIR)
+    with open(SAVE_DIR + 'info.txt', 'w+') as f:
+        f.write('LR = {}\nBATCH_SIZE = {}\nEPOCHS = {}\n'.format(LR, BATCH_SIZE, EPOCHS))
+    
+    run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE, save_dir=SAVE_DIR, num_epochs=EPOCHS)
