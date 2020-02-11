@@ -67,6 +67,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
 
     
+    print('Loading model...')
     # setup the model
     if mode == 'flow':
         i3d = InceptionI3d(400, in_channels=2)
@@ -74,10 +75,16 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     else:
         i3d = InceptionI3d(400, in_channels=3)
         i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
+        #state_dict = torch.load('checkpoints/000990.pt')#['model_state_dict']
+        #checkpoint = OrderedDict()
+        #for k, v in state_dict.items():
+        #    name = k[7:] # remove 'module'
+        #    checkpoint[name] = v
     i3d.replace_logits(157)
-    #i3d.load_state_dict(torch.load('/ssd/models/000920.pt'))
+    i3d.load_state_dict(torch.load('checkpoints/000990.pt'))
     i3d.cuda()
     i3d = nn.DataParallel(i3d)
+    print('Loaded model.')
 
     lr = init_lr
     optimizer = optim.SGD(i3d.parameters(), lr=lr, momentum=0.9, weight_decay=0.0000001)
@@ -94,9 +101,11 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         for phase in ['train', 'val']:
             if phase == 'train':
                 i3d.train(True)
+                print('-'*10, 'TRAINING', '-'*10)
             else:
                 i3d.train(False)  # Set model to evaluate mode
-                
+                print('-'*10, 'VALIDATION', '-'*10)
+
             loss = 0.0
             optimizer.zero_grad()
             
@@ -107,8 +116,9 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 inputs, labels, vid = data
 
                 # wrap them in Variable
+                t = inputs.shape[2]
                 inputs = Variable(inputs.cuda())
-                t = inputs.size(2)
+                #t = inputs.size(2)
                 labels = Variable(labels.cuda())
 
                 per_frame_logits = i3d(inputs)
@@ -130,7 +140,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                     optimizer.zero_grad()
                     lr_sched.step()
                     if steps % 10 == 0:
-                        print('{} loss: {:.4f}'.format(phase, loss.data))
+                        print('Step {} {} loss: {:.4f}'.format(steps, phase, loss.data))
                         # save model
                         if not os.path.exists(save_model):
                             os.makedirs(save_model)
