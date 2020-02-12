@@ -133,7 +133,7 @@ class Charades(data_utl.Dataset):
             imgs = load_flow_frames(self.root, vid, 1, nf, stride)
 
         inputs = torch.cat(imgs)
-        inputs = data.permute(1, 0, 2, 3)
+        inputs = inputs.permute(1, 0, 2, 3)
 
         return inputs, torch.from_numpy(label), vid
 
