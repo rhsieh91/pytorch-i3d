@@ -46,7 +46,11 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
                 },
                 save_path)
 
-def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
+def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', 
+        train_scene_map_pkl='./data/annotations/charades_train_scene_map.pkl',
+        test_scene_map_pkl='./data/annotations/charades_test_scene_map.pkl',
+        batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
+
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -63,7 +67,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, 'training', root, mode, train_transforms, stride, num_span_frames)
+        train_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'training', root, mode, train_transforms, stride, num_span_frames)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -76,7 +80,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        val_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'testing', root, mode, test_transforms, stride, num_span_frames)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
@@ -131,11 +135,16 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             for data in dataloaders[phase]:
                 # get the inputs
                 # note: for SIFE-Net we would also have scene_labels
-                inputs, labels, vid = data
+                inputs, actions, scenes, vid = data
+                print('input shape = {}'.format(inputs.shape))
+                print('actions shape = {}'.format(actions.shape))
+                print('scenes shape = {}'.format(scenes.shape))
+                print('scenes = {}'.format(scenes))
+                print('vid = {}'.format(vid))
 
                 t = inputs.shape[2]
                 inputs = inputs.cuda()
-                labels = labels.cuda()
+                actions = actions.cuda()
                 
                 if phase == 'train':
                     per_frame_logits = i3d(inputs)
@@ -147,7 +156,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
-                labels = torch.max(labels, dim=2)[0] # B x Classes
+                actions = torch.max(labels, dim=2)[0] # B x Classes
                 
                 num_correct += torch.sum(labels == max_frame_logits)
                 num_actions += torch.sum(labels, dim=(0, 1)) 
