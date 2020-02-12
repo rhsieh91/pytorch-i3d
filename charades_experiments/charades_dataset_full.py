@@ -116,7 +116,6 @@ class Charades(data_utl.Dataset):
         self.transforms = transforms
         self.mode = mode
         self.root = root
-        self.save_dir = save_dir
 
     def __getitem__(self, index):
         """
