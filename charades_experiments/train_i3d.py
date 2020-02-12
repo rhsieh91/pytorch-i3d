@@ -10,8 +10,10 @@ import pickle
 import datetime
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-lr', type=float, help='learning rate')
-parser.add_argument('-bs', type=int, help='batch size')
+parser.add_argument('--lr', type=float, help='learning rate')
+parser.add_argument('--bs', type=int, help='batch size')
+parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
+parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
 args = parser.parse_args()
 
 import torch
@@ -104,7 +106,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
 
     lr = init_lr
     optimizer = optim.Adam(i3d.parameters(), lr=lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20, 30, 40, 50], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20, 30, 50], gamma=0.1)
 
     steps = 0 
     # TRAIN
@@ -179,16 +181,17 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
      
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    if len(sys.argv) < len(vars(args))+1:
         parser.print_usage()
+        parser.print_help()
     else:
         print('Starting...')
         now = datetime.datetime.now()
 
         LR = args.lr
         BATCH_SIZE = args.bs
-        STRIDE = 4 # temporal stride for sampling
-        NUM_SPAN_FRAMES = 64 # total number frames to sample for inputs
+        STRIDE = args.stride # temporal stride for sampling
+        NUM_SPAN_FRAMES = args.num_span_frames # total number frames to sample for inputs
         NUM_EPOCHS = 150
         SAVE_DIR = './checkpoints-{}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
 
