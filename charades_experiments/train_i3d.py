@@ -106,7 +106,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
 
     lr = init_lr
     optimizer = optim.Adam(i3d.parameters(), lr=lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20, 30, 50], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [5, 50], gamma=0.1)
 
     steps = 0 
     # TRAIN
@@ -147,10 +147,19 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
+                predicted_labels = F.sigmoid(max_frame_logits) #>= 0.5 # for accuracy calculation purposes
                 labels = torch.max(labels, dim=2)[0] # B x Classes
                 
-                num_correct += torch.sum(labels == max_frame_logits)
+                num_correct += torch.sum(predicted_labels == labels)
                 num_actions += torch.sum(labels, dim=(0, 1)) 
+
+                ## DEBUGGING
+                #print('----------DEBUGGING----------')
+                #print('labels:', labels)
+                #print('predicted_labels', predicted_labels)
+                #print('predicted_labels == labels', predicted_labels == labels)
+                #print('num_correct:', num_correct)
+                #print('num_actions:', num_actions)
 
                 # Loss
                 if phase == 'train':
