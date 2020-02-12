@@ -14,6 +14,7 @@ import os
 import os.path
 
 import cv2
+from PIL import Image
 
 def video_to_tensor(pic):
     """Convert a ``numpy.ndarray`` to tensor.
@@ -27,22 +28,32 @@ def video_to_tensor(pic):
     """
     return torch.from_numpy(pic.transpose([3,0,1,2]))
 
+def pil_loader(path):
+    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
+    with open(path, 'rb') as f:
+        img = Image.open(f)
+        return img.convert('RGB')
 
-def load_rgb_frames(image_dir, vid, start, num, stride):
+def load_rgb_frames(image_dir, vid, start, num, stride, transforms):
     frames = []
     for i in range(start, start+num, stride):
         try:
-            img = cv2.imread(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))[:, :, [2, 1, 0]]
-            w,h,c = img.shape
-            if w < 226 or h < 226:
-                d = 226.-min(w,h)
-                sc = 1+d/min(w,h)
-                img = cv2.resize(img,dsize=(0,0),fx=sc,fy=sc)
-            img = (img/255.)*2 - 1
+            img = pil_loader(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))
+            #            img = cv2.imread(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))[:, :, [2, 1, 0]]
+            #            w,h,c = img.shape
+            #            if w < 226 or h < 226:
+            #                d = 226.-min(w,h)
+            #                sc = 1+d/min(w,h)
+            #                img = cv2.resize(img,dsize=(0,0),fx=sc,fy=sc)
+            #            img = (img/255.)*2 - 1
         except: # duplicate last frame
             img = frames[-1]
-        frames.append(img)
-    return np.asarray(frames, dtype=np.float32)
+        print(transforms)
+        img = transforms(img)
+        print(type(img))
+        frames.append(torch.unsqueeze(img, 0))
+    return frames
+    #return np.asarray(frames, dtype=np.float32)
 
 def load_flow_frames(image_dir, vid, start, num):
     frames = []
@@ -131,13 +142,16 @@ class Charades(data_utl.Dataset):
             return 0, 0, vid
 
         if self.mode == 'rgb':
-            imgs = load_rgb_frames(self.root, vid, 1, nf, stride)
+            imgs = load_rgb_frames(self.root, vid, 1, nf, stride, self.transforms)
         else:
             imgs = load_flow_frames(self.root, vid, 1, nf, stride)
 
-        imgs = self.transforms(imgs)
+        #imgs = self.transforms(imgs)
+        data = torch.cat(imgs)
+        print(data.shape)
 
-        return video_to_tensor(imgs), torch.from_numpy(label), vid
+        return data, torch.from_numpy(label), vid
+        #return video_to_tensor(imgs), torch.from_numpy(label), vid
 
     def __len__(self):
         return len(self.data)

@@ -19,7 +19,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim import lr_scheduler
-from torch.autograd import Variable
 
 import torchvision
 from torchvision import datasets, transforms
@@ -49,17 +48,19 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
-    train_transforms = transforms.Compose([videotransforms.RandomCrop(224),
-                                           videotransforms.RandomHorizontalFlip(),
-    ])
-    test_transforms = transforms.Compose([videotransforms.CenterCrop(224)])
+    train_transforms = transforms.Compose([transforms.Resize((224,224)),
+                                           transforms.ToTensor()
+                                          ])
+    test_transforms = transforms.Compose([transforms.Resize((224,224)),
+                                          transforms.ToTensor()
+                                         ])
     
     print('Getting train dataset...')
     if os.path.exists('./data/train_dataset.pickle'):
         pickle_in = open('./data/train_dataset.pickle', 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, 'training', root, mode, test_transforms)
+        train_dataset = Dataset(split, 'training', root, mode, train_transforms)
         pickle_out = open('./data/train_dataset.pickle', 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -95,12 +96,13 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         #    name = k[7:] # remove 'module'
         #    checkpoint[name] = v
     i3d.replace_logits(157)
-    i3d.load_state_dict(torch.load('checkpoints/000990.pt'))
+    #i3d.load_state_dict(torch.load('checkpoints/000990.pt'))
     i3d.cuda()
     i3d = nn.DataParallel(i3d)
     print('Loaded model.')
 
     lr = init_lr
+    # TODO: try using Adam optimizer
     optimizer = optim.SGD(i3d.parameters(), lr=lr, momentum=0.9, weight_decay=0.0000001)
     lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [300, 1000])
 
@@ -127,17 +129,22 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             print('Entering data loading...')
             for data in dataloaders[phase]:
                 # get the inputs
+                # note: for SIFE-Net we would also have scene_labels
                 inputs, labels, vid = data
 
                 # wrap them in Variable
                 t = inputs.shape[2]
-                inputs = Variable(inputs.cuda())
+                inputs = inputs.cuda()
+                
+                print('inputs.shape = {}'.format(inputs.shape))
                 #t = inputs.size(2)
-                labels = Variable(labels.cuda())
+                labels = labels.cuda()
+                print('labels.shape = {}'.format(labels.shape))
 
                 per_frame_logits = i3d(inputs)
                 # upsample to input size
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x C x T x H x W
+                print('per_frame_logits.shape = {}'.format(per_frame_logits.shape))
 
                 loss = F.binary_cross_entropy_with_logits(per_frame_logits, labels)
 
