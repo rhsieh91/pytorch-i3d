@@ -39,21 +39,12 @@ def load_rgb_frames(image_dir, vid, start, num, stride, transforms):
     for i in range(start, start+num, stride):
         try:
             img = pil_loader(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))
-            #            img = cv2.imread(os.path.join(image_dir, vid, vid+'-'+str(i).zfill(6)+'.jpg'))[:, :, [2, 1, 0]]
-            #            w,h,c = img.shape
-            #            if w < 226 or h < 226:
-            #                d = 226.-min(w,h)
-            #                sc = 1+d/min(w,h)
-            #                img = cv2.resize(img,dsize=(0,0),fx=sc,fy=sc)
-            #            img = (img/255.)*2 - 1
+            img = transforms(img)
+            img = torch.unsqueeze(img, 0)
         except: # duplicate last frame
             img = frames[-1]
-        print(transforms)
-        img = transforms(img)
-        print(type(img))
-        frames.append(torch.unsqueeze(img, 0))
+        frames.append(img)
     return frames
-    #return np.asarray(frames, dtype=np.float32)
 
 def load_flow_frames(image_dir, vid, start, num):
     frames = []
@@ -75,7 +66,7 @@ def load_flow_frames(image_dir, vid, start, num):
     return np.asarray(frames, dtype=np.float32)
 
 
-def make_dataset(split_file, split, root, mode, num_classes=157):
+def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_classes=157):
     dataset = []
     with open(split_file, 'r') as f:
         data = json.load(f)
@@ -93,11 +84,9 @@ def make_dataset(split_file, split, root, mode, num_classes=157):
         # Sample clips with temporal stride of 4, having input clips spanning total of 125 frames (~5.2 seconds)
         # Follows approach from Long-Term Feature Banks for Detailed Video Understanding (https://arxiv.org/pdf/1812.05038.pdf)
         
-        stride = 4
-        num_span_frames = 125
         num_avail_frames = len(os.listdir(os.path.join(root, vid)))
         if mode == 'flow':
-            num_span_frames = num_span_frames//2
+            num_span_frames=num_span_frames//2
             
         label = np.zeros((num_classes, num_span_frames), np.float32)
 
@@ -120,9 +109,9 @@ def make_dataset(split_file, split, root, mode, num_classes=157):
 
 class Charades(data_utl.Dataset):
 
-    def __init__(self, split_file, split, root, mode, transforms=None, save_dir='', num=0):
+    def __init__(self, split_file, split, root, mode, transforms, stride, num_span_frames):
         
-        self.data = make_dataset(split_file, split, root, mode)
+        self.data = make_dataset(split_file, split, root, mode, stride, num_span_frames)
         self.split_file = split_file
         self.transforms = transforms
         self.mode = mode
@@ -138,20 +127,16 @@ class Charades(data_utl.Dataset):
             tuple: (image, target) where target is class_index of the target class.
         """
         vid, label, nf, stride = self.data[index]
-        if os.path.exists(os.path.join(self.save_dir, vid+'.npy')):
-            return 0, 0, vid
 
         if self.mode == 'rgb':
             imgs = load_rgb_frames(self.root, vid, 1, nf, stride, self.transforms)
         else:
             imgs = load_flow_frames(self.root, vid, 1, nf, stride)
 
-        #imgs = self.transforms(imgs)
-        data = torch.cat(imgs)
-        print(data.shape)
+        inputs = torch.cat(imgs)
+        inputs = data.permute(1, 0, 2, 3)
 
-        return data, torch.from_numpy(label), vid
-        #return video_to_tensor(imgs), torch.from_numpy(label), vid
+        return inputs, torch.from_numpy(label), vid
 
     def __len__(self):
         return len(self.data)

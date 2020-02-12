@@ -10,8 +10,8 @@ import pickle
 import datetime
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-save_dir', type=str)
-parser.add_argument('-epochs', type=int)
+parser.add_argument('-lr', type=float, help='learning rate')
+parser.add_argument('-bs', type=int, help='batch size')
 args = parser.parse_args()
 
 import torch
@@ -44,7 +44,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
                 },
                 save_path)
 
-def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', num_epochs=150):
+def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -56,24 +56,26 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                                          ])
     
     print('Getting train dataset...')
-    if os.path.exists('./data/train_dataset.pickle'):
-        pickle_in = open('./data/train_dataset.pickle', 'rb')
+    train_path = './data/train_dataset_{}_{}.pickle'.format(stride, num_span_frames)
+    if os.path.exists(train_path):
+        pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, 'training', root, mode, train_transforms)
-        pickle_out = open('./data/train_dataset.pickle', 'wb')
+        train_dataset = Dataset(split, 'training', root, mode, train_transforms, stride, num_span_frames)
+        pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
     print('Got train dataset.')
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
 
     print('Getting validation dataset...')
-    if os.path.exists('./data/val_dataset.pickle'):
-        pickle_in = open('./data/val_dataset.pickle', 'rb')
+    val_path = './data/val_dataset_{}_{}.pickle'.format(stride, num_span_frames)
+    if os.path.exists(val_path):
+        pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, 'testing', root, mode, test_transforms)
-        pickle_out = open('./data/val_dataset.pickle', 'wb')
+        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
     print('Got val dataset.')
@@ -96,22 +98,20 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         #    name = k[7:] # remove 'module'
         #    checkpoint[name] = v
     i3d.replace_logits(157)
-    #i3d.load_state_dict(torch.load('checkpoints/000990.pt'))
     i3d.cuda()
     i3d = nn.DataParallel(i3d)
     print('Loaded model.')
 
     lr = init_lr
-    # TODO: try using Adam optimizer
-    optimizer = optim.SGD(i3d.parameters(), lr=lr, momentum=0.9, weight_decay=0.0000001)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [300, 1000])
+    optimizer = optim.Adam(i3d.parameters(), lr=lr)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20, 30, 40, 50], gamma=0.1)
 
-
-    steps = 0
-    # train it
+    steps = 0 
+    # TRAIN
     for epoch in range(num_epochs):
-        print('-'*10, 'EPOCH {}/{}'.format(epoch, num_epochs), '-'*10)
-        print('-' * 30)
+        print('-' * 50)
+        print('EPOCH {}/{}'.format(epoch, num_epochs))
+        print('-' * 50)
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
@@ -121,72 +121,80 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             else:
                 i3d.train(False)  # Set model to evaluate mode
                 print('-'*10, 'VALIDATION', '-'*10)
-
-            loss = 0.0
-            optimizer.zero_grad()
             
             # Iterate over data.
+            num_correct = 0
+            num_actions = 0
             print('Entering data loading...')
             for data in dataloaders[phase]:
                 # get the inputs
                 # note: for SIFE-Net we would also have scene_labels
                 inputs, labels, vid = data
 
-                # wrap them in Variable
                 t = inputs.shape[2]
                 inputs = inputs.cuda()
-                
-                print('inputs.shape = {}'.format(inputs.shape))
-                #t = inputs.size(2)
                 labels = labels.cuda()
-                print('labels.shape = {}'.format(labels.shape))
-
-                per_frame_logits = i3d(inputs)
-                # upsample to input size
-                per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x C x T x H x W
-                print('per_frame_logits.shape = {}'.format(per_frame_logits.shape))
-
-                loss = F.binary_cross_entropy_with_logits(per_frame_logits, labels)
-
-                ## compute classification loss (with max-pooling along time B x C x T)
-                #cls_loss = F.binary_cross_entropy_with_logits(torch.max(per_frame_logits, dim=2)[0], torch.max(labels, dim=2)[0])
-                #tot_cls_loss += cls_loss.data[0]
-
-                loss.backward()
-
+                
                 if phase == 'train':
-                    writer.add_scalar('Train loss', loss.data, steps)
-                    steps += 1
-                    optimizer.step()
-                    optimizer.zero_grad()
-                    lr_sched.step()
-                    if steps % 10 == 0:
-                        print('Step {} {} loss: {:.4f}'.format(steps, phase, loss.data))
-                        # save model
-                        # TODO: only save best accuracy step
+                    per_frame_logits = i3d(inputs)
+                else:
+                    with torch.no_grad():
+                        per_frame_logits = i3d(inputs)
 
-                        #save_checkpoint(model, optimizer, loss, save_dir, epoch, steps)
-                        if not os.path.exists(save_dir):
-                            os.makedirs(save_dir)
-                        torch.save(i3d.module.state_dict(), save_dir+str(steps).zfill(6)+'.pt')
-            if phase == 'val':
-                # TODO: only save best val accuracy step
-                writer.add_scalar('Validation loss', loss.data, steps)
-                print('{} loss: {:.4f}'.format(phase, loss.data))
+                # upsample to input size
+                per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
+
+                max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
+                labels = torch.max(labels, dim=2)[0] # B x Classes
+                
+                num_correct += torch.sum(labels == max_frame_logits)
+                num_actions += torch.sum(labels, dim=(0, 1)) 
+
+                # Loss
+                if phase == 'train':
+                    loss = F.binary_cross_entropy_with_logits(max_frame_logits, labels)
+                    writer.add_scalar('Train loss', loss, steps)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    if steps % 10 == 0:
+                        print('Step {} {} loss: {:.4f}'.format(steps, phase, loss))
+                    steps += 1
+
+            # Accuracy
+            acc = float(num_correct) / float(num_actions)
+            if phase == 'train':
+                writer.add_scalar('Train accuracy', acc, epoch)
+                print('-' * 50)
+                print('{} accuracy: {:.4f}'.format(phase, acc))
+                print('-' * 50)
+                save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
+            else:
+                writer.add_scalar('Validation accuracy', acc, epoch)
+                print('{} accuracy: {:.4f}'.format(phase, acc))
+        
+        lr_sched.step()
     
     writer.close()
-    
+     
 
 if __name__ == '__main__':
-    print('Starting...')
-    now = datetime.datetime.now()
-    LR = 0.1
-    BATCH_SIZE = 8
-    EPOCHS = 150
-    SAVE_DIR = './checkpoints-{}-{}-{}-{}-{}-{}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
-    if not os.path.exists(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
-    with open(SAVE_DIR + 'info.txt', 'w+') as f:
-        f.write('LR = {}\nBATCH_SIZE = {}\nEPOCHS = {}\n'.format(LR, BATCH_SIZE, EPOCHS))
-    
-    run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE, save_dir=SAVE_DIR, num_epochs=EPOCHS)
+    if len(sys.argv) < 3:
+        parser.print_usage()
+    else:
+        print('Starting...')
+        now = datetime.datetime.now()
+
+        LR = args.lr
+        BATCH_SIZE = args.bs
+        STRIDE = 4 # temporal stride for sampling
+        NUM_SPAN_FRAMES = 64 # total number frames to sample for inputs
+        NUM_EPOCHS = 150
+        SAVE_DIR = './checkpoints-{}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
+
+        if not os.path.exists(SAVE_DIR):
+            os.makedirs(SAVE_DIR)
+        with open(SAVE_DIR + 'info.txt', 'w+') as f:
+            f.write('LR = {}\nBATCH_SIZE = {}\nSTRIDE = {}\nNUM_SPAN_FRAMES = {}\nEPOCHS = {}'.format(LR, BATCH_SIZE, STRIDE, NUM_SPAN_FRAMES, NUM_EPOCHS))
+        
+        run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE, save_dir=SAVE_DIR, stride=STRIDE, num_span_frames=NUM_SPAN_FRAMES, num_epochs=NUM_EPOCHS)
