@@ -147,10 +147,10 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
-                predicted_labels = F.sigmoid(max_frame_logits) >= 0.5 # for accuracy calculation purposes
+                predicted_labels = torch.sigmoid(max_frame_logits) >= 0.5 # for accuracy calculation purposes
                 labels = torch.max(labels, dim=2)[0] # B x Classes
                 
-                num_correct += torch.sum(predicted_labels == labels)
+                num_correct += torch.sum((predicted_labels + labels) == 2)
                 num_actions += torch.sum(labels, dim=(0, 1)) 
 
                 ## DEBUGGING
@@ -160,6 +160,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 #print('predicted_labels == labels', predicted_labels == labels)
                 #print('num_correct:', num_correct)
                 #print('num_actions:', num_actions)
+                #print('num predicted actions:', float(torch.sum(predicted_labels, dim=(0,1))))
 
                 # Loss
                 if phase == 'train':
