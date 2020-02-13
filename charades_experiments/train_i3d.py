@@ -17,6 +17,7 @@ import torchvision
 from torchvision import datasets, transforms
 import videotransforms
 from torch.utils.tensorboard import SummaryWriter
+from collections import OrderedDict
 
 import numpy as np
 from pytorch_i3d import InceptionI3d
@@ -27,6 +28,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
+parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint')
 args = parser.parse_args()
 
 def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
@@ -126,13 +128,17 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         i3d.load_state_dict(torch.load('models/flow_imagenet.pt'))
     else:
         i3d = InceptionI3d(400, in_channels=3)
-        i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
-        #state_dict = torch.load('checkpoints/000990.pt')#['model_state_dict']
-        #checkpoint = OrderedDict()
-        #for k, v in state_dict.items():
-        #    name = k[7:] # remove 'module'
-        #    checkpoint[name] = v
-    i3d.replace_logits(157)
+        if args.checkpoint_path:
+            i3d.replace_logits(157)
+            state_dict = torch.load(args.checkpoint_path)['model_state_dict']
+            checkpoint = OrderedDict()
+            for k, v in state_dict.items():
+                name = k[7:] # remove 'module'
+                checkpoint[name] = v
+            i3d.load_state_dict(checkpoint)
+        else:
+            i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
+            i3d.replace_logits(157)
     i3d.cuda()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.device_count() > 1:
@@ -142,10 +148,10 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     print('Loaded model.')
 
     optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [40000, 8000], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [35000], gamma=0.1)
 
-    steps = 0 # can also load from a step here: torch.load(<checkpoint>)['steps']
-    start_epoch = 0 # torch.load(<checkpoint>)['epoch']
+    steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
+    start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
     # TRAIN
     for epoch in range(start_epoch, num_epochs):
         print('-' * 50)
