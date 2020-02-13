@@ -2,8 +2,8 @@
 # Modified by Samuel Kwong
 
 import os
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
-os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,3'
+#os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
+#os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,3'
 import sys
 import argparse
 import pickle 
@@ -32,17 +32,18 @@ from charades_dataset_full import Charades as Dataset
 
 from torch.utils.tensorboard import SummaryWriter
 
-def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
+def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
     """Saves checkpoint of model weights during training."""
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    save_path = save_dir + str(epoch).zfill(2) + str(n_iter).zfill(6) + '.pt'
+    save_path = save_dir + str(epoch).zfill(2) + str(steps).zfill(6) + '.pt'
     torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
+                'loss': loss,
+                'steps': steps 
                 },
                 save_path)
 
@@ -101,16 +102,20 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         #    checkpoint[name] = v
     i3d.replace_logits(157)
     i3d.cuda()
-    i3d = nn.DataParallel(i3d)
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.device_count() > 1:
+        print('Using {} GPUs'.format(torch.cuda.device_count()))
+        i3d = nn.DataParallel(i3d)
+    i3d.to(device)
     print('Loaded model.')
 
-    lr = init_lr
-    optimizer = optim.Adam(i3d.parameters(), lr=lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [5, 50], gamma=0.1)
+    optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [40000, 8000], gamma=0.1)
 
-    steps = 0 
+    steps = 0 # can also load from a step here: torch.load(<checkpoint>)['steps']
+    start_epoch = 0 # torch.load(<checkpoint>)['epoch']
     # TRAIN
-    for epoch in range(num_epochs):
+    for epoch in range(start_epoch, num_epochs):
         print('-' * 50)
         print('EPOCH {}/{}'.format(epoch, num_epochs))
         print('-' * 50)
@@ -147,7 +152,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
-                predicted_labels = torch.sigmoid(max_frame_logits) >= 0.5 # for accuracy calculation purposes
+                predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for accuracy calculation purposes
                 labels = torch.max(labels, dim=2)[0] # B x Classes
                 
                 num_correct += torch.sum((predicted_labels + labels) == 2)
@@ -165,10 +170,11 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 # Loss
                 if phase == 'train':
                     loss = F.binary_cross_entropy_with_logits(max_frame_logits, labels)
-                    writer.add_scalar('Train loss', loss, steps)
+                    writer.add_scalar('loss/train', loss, steps)
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
+                    lr_sched.step()
                     if steps % 10 == 0:
                         print('Step {} {} loss: {:.4f}'.format(steps, phase, loss))
                     steps += 1
@@ -176,17 +182,15 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             # Accuracy
             acc = float(num_correct) / float(num_actions)
             if phase == 'train':
-                writer.add_scalar('Train accuracy', acc, epoch)
+                writer.add_scalar('accuracy/train', acc, epoch)
                 print('-' * 50)
                 print('{} accuracy: {:.4f}'.format(phase, acc))
                 print('-' * 50)
                 save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
             else:
-                writer.add_scalar('Validation accuracy', acc, epoch)
+                writer.add_scalar('accuracy/val', acc, epoch)
                 print('{} accuracy: {:.4f}'.format(phase, acc))
         
-        lr_sched.step()
-    
     writer.close()
      
 
