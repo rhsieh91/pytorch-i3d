@@ -1,13 +1,26 @@
 # Contributor: piergiaj
 # Modified by Samuel Kwong
 
+import sklearn.metrics as metrics
 import os
-#os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
-#os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,3'
 import sys
 import argparse
 import pickle 
 import datetime
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.optim import lr_scheduler
+import torchvision
+from torchvision import datasets, transforms
+import videotransforms
+from torch.utils.tensorboard import SummaryWriter
+
+import numpy as np
+from pytorch_i3d import InceptionI3d
+from charades_dataset_full import Charades as Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
@@ -15,22 +28,6 @@ parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
 args = parser.parse_args()
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torch.optim import lr_scheduler
-
-import torchvision
-from torchvision import datasets, transforms
-import videotransforms
-
-import numpy as np
-from pytorch_i3d import InceptionI3d
-from charades_dataset_full import Charades as Dataset
-
-from torch.utils.tensorboard import SummaryWriter
 
 def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
     """Saves checkpoint of model weights during training."""
@@ -46,6 +43,41 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 'steps': steps 
                 },
                 save_path)
+
+# From https://github.com/facebookresearch/video-long-term-feature-banks/blob/master/lib/utils/metrics.py
+def mean_ap_metric(predicts, targets):
+    """Compute mAP, wAP, AUC for Charades."""
+
+    predicts = np.vstack(predicts.cpu().detach().numpy())
+    targets = np.vstack(targets.cpu().detach().numpy())
+
+    predict = predicts[:, ~np.all(targets == 0, axis=0)]
+    target = targets[:, ~np.all(targets == 0, axis=0)]
+    mean_auc = 0
+    aps = [0]
+    try:
+        mean_auc = metrics.roc_auc_score(target, predict)
+    except ValueError:
+        print(
+            'The roc_auc curve requires a sufficient number of classes \
+            which are missing in this sample.'
+        )
+    try:
+        aps = metrics.average_precision_score(target, predict, average=None)
+    except ValueError:
+        print(
+            'Average precision requires a sufficient number of samples \
+            in a batch which are missing in this sample.'
+        )
+
+    mean_ap = np.mean(aps)
+    weights = np.sum(target.astype(float), axis=0)
+    weights /= np.sum(weights)
+    mean_wap = np.sum(np.multiply(aps, weights))
+    all_aps = np.zeros((1, targets.shape[1]))
+    all_aps[:, ~np.all(targets == 0, axis=0)] = aps
+
+    return mean_auc, mean_ap, mean_wap, all_aps.flatten()
 
 def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
@@ -152,11 +184,10 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 per_frame_logits = F.interpolate(per_frame_logits, t, mode='linear') # B x Classes x T
 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
-                predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for accuracy calculation purposes
                 labels = torch.max(labels, dim=2)[0] # B x Classes
                 
-                num_correct += torch.sum((predicted_labels + labels) == 2)
-                num_actions += torch.sum(labels, dim=(0, 1)) 
+                #num_correct += torch.sum((predicted_labels + labels) == 2)
+                #num_actions += torch.sum(labels, dim=(0, 1)) 
 
                 ## DEBUGGING
                 #print('----------DEBUGGING----------')
@@ -180,16 +211,17 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                     steps += 1
 
             # Accuracy
-            acc = float(num_correct) / float(num_actions)
+            predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
+            mAP = mean_ap_metric(predicted_labels, labels)
             if phase == 'train':
-                writer.add_scalar('accuracy/train', acc, epoch)
+                writer.add_scalar('mAP/train', mAP, epoch)
                 print('-' * 50)
-                print('{} accuracy: {:.4f}'.format(phase, acc))
+                print('{} mAP: {:.4f}'.format(phase, mAP))
                 print('-' * 50)
                 save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
             else:
-                writer.add_scalar('accuracy/val', acc, epoch)
-                print('{} accuracy: {:.4f}'.format(phase, acc))
+                writer.add_scalar('mAP/val', mAP, epoch)
+                print('{} mAP: {:.4f}'.format(phase, mAP))
         
     writer.close()
      
