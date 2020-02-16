@@ -174,16 +174,11 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
             for data in dataloaders[phase]:
                 # get the inputs
                 # note: for SIFE-Net we would also have scene_labels
-                inputs, action_labels, scene_labels, vid = data
-                print('input shape = {}'.format(inputs.shape))
-                print('actions shape = {}'.format(actions.shape))
-                print('scenes shape = {}'.format(scenes.shape))
-                print('scenes = {}'.format(scenes))
-                print('vid = {}'.format(vid))
+                inputs, labels, _, vid = data
 
                 t = inputs.shape[2]
                 inputs = inputs.cuda()
-                action_labels = action_labels.cuda()
+                labels = labels.cuda()
                 
                 if phase == 'train':
                     per_frame_logits = i3d(inputs)
