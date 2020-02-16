@@ -28,7 +28,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
-parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint')
+parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint (\'\' to train from kinetics baseline)')
 args = parser.parse_args()
 
 def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
@@ -48,22 +48,14 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
 
 # From https://github.com/facebookresearch/video-long-term-feature-banks/blob/master/lib/utils/metrics.py
 def mean_ap_metric(predicts, targets):
-    """Compute mAP, wAP, AUC for Charades."""
+    """Compute mAP for Charades."""
 
-    predicts = np.vstack(predicts.cpu().detach().numpy())
-    targets = np.vstack(targets.cpu().detach().numpy())
+    predicts = np.vstack(predicts.cpu().detach())
+    targets = np.vstack(targets.cpu().detach())
 
     predict = predicts[:, ~np.all(targets == 0, axis=0)]
     target = targets[:, ~np.all(targets == 0, axis=0)]
-    mean_auc = 0
     aps = [0]
-    try:
-        mean_auc = metrics.roc_auc_score(target, predict)
-    except ValueError:
-        print(
-            'The roc_auc curve requires a sufficient number of classes \
-            which are missing in this sample.'
-        )
     try:
         aps = metrics.average_precision_score(target, predict, average=None)
     except ValueError:
@@ -75,11 +67,7 @@ def mean_ap_metric(predicts, targets):
     mean_ap = np.mean(aps)
     weights = np.sum(target.astype(float), axis=0)
     weights /= np.sum(weights)
-    mean_wap = np.sum(np.multiply(aps, weights))
-    all_aps = np.zeros((1, targets.shape[1]))
-    all_aps[:, ~np.all(targets == 0, axis=0)] = aps
-
-    return mean_auc, mean_ap, mean_wap, all_aps.flatten()
+    return mean_ap 
 
 def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
@@ -148,7 +136,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     print('Loaded model.')
 
     optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [35000], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10000, 25000], gamma=0.1)
 
     steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
     start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
