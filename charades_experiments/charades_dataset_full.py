@@ -97,7 +97,7 @@ def make_dataset(split_file, train_scene_map_pkl, test_scene_map_pkl,split, root
             
         action_label = np.zeros((num_classes, num_span_frames), np.float32)
 
-        scene_label = np.zeros(num_span_frames, np.float32) # scene label goes from [0, num_class-1]
+        scene_label = np.zeros(num_span_frames, np.int64) # scene label goes from [0, num_class-1]
         if split == 'training':
             scene_label.fill(train_scene_map[vid])
         else:
@@ -162,7 +162,7 @@ if __name__ == '__main__':
     root = ''
     mode = 'rgb'
     stride = 4
-    num_span_frames = 64
+    num_span_frames = 32
     batch_size = 2
     train_scene_map_pkl = './data/annotations/charades_train_scene_map.pkl'
     test_scene_map_pkl = './data/annotations/charades_test_scene_map.pkl'
@@ -180,7 +180,7 @@ if __name__ == '__main__':
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Charades(split, 'training', root, mode, train_transforms, stride, num_span_frames)
+        train_dataset = Charades(split, train_scene_map_pkl, test_scene_map_pkl, 'training', root, mode, train_transforms, stride, num_span_frames)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
