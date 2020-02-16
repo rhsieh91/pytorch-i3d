@@ -50,6 +50,7 @@ class SIFE(nn.Module):
 
         # Network for scene classification
         self.scene_branch = nn.Sequential()
+        self.scene_branch.add_module('s_flatten', nn.Flatten())
         self.scene_branch.add_module('s_fc1', nn.Linear(self.num_features, self.num_features))
         self.scene_branch.add_module('s_bn1', nn.BatchNorm1d(self.num_features))
         self.scene_branch.add_module('s_relu1', nn.ReLU(inplace=True))
