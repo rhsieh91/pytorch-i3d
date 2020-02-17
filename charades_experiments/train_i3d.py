@@ -1,7 +1,6 @@
 # Contributor: piergiaj
-# Modified by Samuel Kwong
+# Modified by Samuel Kwong and Richard Hsieh
 
-import sklearn.metrics as metrics
 import os
 import sys
 import argparse
@@ -46,28 +45,24 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-# From https://github.com/facebookresearch/video-long-term-feature-banks/blob/master/lib/utils/metrics.py
-def mean_ap_metric(predicts, targets):
-    """Compute mAP for Charades."""
-
-    predicts = np.vstack(predicts.cpu().detach())
-    targets = np.vstack(targets.cpu().detach())
-
-    predict = predicts[:, ~np.all(targets == 0, axis=0)]
-    target = targets[:, ~np.all(targets == 0, axis=0)]
-    aps = [0]
-    try:
-        aps = metrics.average_precision_score(target, predict, average=None)
-    except ValueError:
-        print(
-            'Average precision requires a sufficient number of samples \
-            in a batch which are missing in this sample.'
-        )
-
-    mean_ap = np.mean(aps)
-    weights = np.sum(target.astype(float), axis=0)
-    weights /= np.sum(weights)
-    return mean_ap 
+    #def mean_ap_metric(predicts, targets):
+    #    """Compute mAP for Charades."""
+    #    predicts = np.vstack(predicts.cpu().detach())
+    #    targets = np.vstack(targets.cpu().detach())
+    #
+    #    predict = predicts[:, ~np.all(targets == 0, axis=0)]
+    #    target = targets[:, ~np.all(targets == 0, axis=0)]
+    #    aps = [0]
+    #    try:
+    #        aps = metrics.average_precision_score(target, predict, average=None)
+    #    except ValueError:
+    #        print(
+    #            'Average precision requires a sufficient number of samples \
+    #            in a batch which are missing in this sample.'
+    #        )
+    #
+    #    mean_ap = np.mean(aps)
+    #    return mean_ap 
 
 def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
@@ -204,18 +199,18 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                         print('Step {} {} loss: {:.4f}'.format(steps, phase, loss))
                     steps += 1
 
-            # Accuracy
-            predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
-            mAP = mean_ap_metric(predicted_labels, labels)
-            if phase == 'train':
-                writer.add_scalar('mAP/train', mAP, epoch)
-                print('-' * 50)
-                print('{} mAP: {:.4f}'.format(phase, mAP))
-                print('-' * 50)
-                save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
-            else:
-                writer.add_scalar('mAP/val', mAP, epoch)
-                print('{} mAP: {:.4f}'.format(phase, mAP))
+            ## Accuracy
+            #predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
+            #mAP = mean_ap_metric(predicted_labels, labels)
+            #if phase == 'train':
+            #    writer.add_scalar('mAP/train', mAP, epoch)
+            #    print('-' * 50)
+            #    print('{} mAP: {:.4f}'.format(phase, mAP))
+            #    print('-' * 50)
+            #    save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
+            #else:
+            #    writer.add_scalar('mAP/val', mAP, epoch)
+            #    print('{} mAP: {:.4f}'.format(phase, mAP))
         
     writer.close()
      
