@@ -13,7 +13,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
-parser.add_argument('--num_features', type=int, help='size of feature space (64 frames = 7168, 32 frames = 3072, 16 frames = 1024')
+parser.add_argument('--num_features', type=int, help='size of feature space (64 frames=7168, 32 frames=3072, 16 frames=1024)')
 args = parser.parse_args()
 
 import torch
@@ -73,7 +73,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
     print('Got train dataset.')
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
 
     print('Getting validation dataset...')
     val_path = './data/val_dataset_{}_{}.pickle'.format(stride, num_span_frames)
@@ -86,7 +86,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
     print('Got val dataset.')
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)    
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)    
 
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
 
@@ -137,7 +137,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
             for i, data in enumerate(dataloaders[phase]):
                 # get the inputs
                 inputs, action_labels, scene_labels, vid = data
-
+  
                 t = inputs.shape[2]
                 inputs = inputs.cuda()
                 action_labels = action_labels.cuda() # B x num_classes x num_frames
