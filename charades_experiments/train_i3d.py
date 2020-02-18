@@ -1,7 +1,6 @@
 # Contributor: piergiaj
-# Modified by Samuel Kwong
+# Modified by Samuel Kwong and Richard Hsieh
 
-import sklearn.metrics as metrics
 import os
 import sys
 import argparse
@@ -28,7 +27,7 @@ parser.add_argument('--lr', type=float, help='learning rate')
 parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
-parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint')
+parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint (\'\' to train from kinetics baseline)')
 args = parser.parse_args()
 
 def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
@@ -46,40 +45,24 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-# From https://github.com/facebookresearch/video-long-term-feature-banks/blob/master/lib/utils/metrics.py
-def mean_ap_metric(predicts, targets):
-    """Compute mAP, wAP, AUC for Charades."""
-
-    predicts = np.vstack(predicts.cpu().detach().numpy())
-    targets = np.vstack(targets.cpu().detach().numpy())
-
-    predict = predicts[:, ~np.all(targets == 0, axis=0)]
-    target = targets[:, ~np.all(targets == 0, axis=0)]
-    mean_auc = 0
-    aps = [0]
-    try:
-        mean_auc = metrics.roc_auc_score(target, predict)
-    except ValueError:
-        print(
-            'The roc_auc curve requires a sufficient number of classes \
-            which are missing in this sample.'
-        )
-    try:
-        aps = metrics.average_precision_score(target, predict, average=None)
-    except ValueError:
-        print(
-            'Average precision requires a sufficient number of samples \
-            in a batch which are missing in this sample.'
-        )
-
-    mean_ap = np.mean(aps)
-    weights = np.sum(target.astype(float), axis=0)
-    weights /= np.sum(weights)
-    mean_wap = np.sum(np.multiply(aps, weights))
-    all_aps = np.zeros((1, targets.shape[1]))
-    all_aps[:, ~np.all(targets == 0, axis=0)] = aps
-
-    return mean_auc, mean_ap, mean_wap, all_aps.flatten()
+    #def mean_ap_metric(predicts, targets):
+    #    """Compute mAP for Charades."""
+    #    predicts = np.vstack(predicts.cpu().detach())
+    #    targets = np.vstack(targets.cpu().detach())
+    #
+    #    predict = predicts[:, ~np.all(targets == 0, axis=0)]
+    #    target = targets[:, ~np.all(targets == 0, axis=0)]
+    #    aps = [0]
+    #    try:
+    #        aps = metrics.average_precision_score(target, predict, average=None)
+    #    except ValueError:
+    #        print(
+    #            'Average precision requires a sufficient number of samples \
+    #            in a batch which are missing in this sample.'
+    #        )
+    #
+    #    mean_ap = np.mean(aps)
+    #    return mean_ap 
 
 def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
     writer = SummaryWriter() # tensorboard logging
@@ -148,7 +131,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     print('Loaded model.')
 
     optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [35000], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10000, 25000], gamma=0.1)
 
     steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
     start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
@@ -216,18 +199,18 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                         print('Step {} {} loss: {:.4f}'.format(steps, phase, loss))
                     steps += 1
 
-            # Accuracy
-            predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
-            mAP = mean_ap_metric(predicted_labels, labels)
-            if phase == 'train':
-                writer.add_scalar('mAP/train', mAP, epoch)
-                print('-' * 50)
-                print('{} mAP: {:.4f}'.format(phase, mAP))
-                print('-' * 50)
-                save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
-            else:
-                writer.add_scalar('mAP/val', mAP, epoch)
-                print('{} mAP: {:.4f}'.format(phase, mAP))
+            ## Accuracy
+            #predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
+            #mAP = mean_ap_metric(predicted_labels, labels)
+            #if phase == 'train':
+            #    writer.add_scalar('mAP/train', mAP, epoch)
+            #    print('-' * 50)
+            #    print('{} mAP: {:.4f}'.format(phase, mAP))
+            #    print('-' * 50)
+            #    save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
+            #else:
+            #    writer.add_scalar('mAP/val', mAP, epoch)
+            #    print('{} mAP: {:.4f}'.format(phase, mAP))
         
     writer.close()
      
