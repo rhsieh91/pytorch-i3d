@@ -113,7 +113,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
     print('Loaded model.')
 
     optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
+    #lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
 
     steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
     start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
@@ -188,7 +188,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
                 writer.add_scalar('mAP/val', mAP, epoch)
                 print('{} mAP: {:.4f}'.format(phase, mAP))
         
-        lr_sched.step() # step after epoch
+        #lr_sched.step() # step after epoch
         
     writer.close()
      
