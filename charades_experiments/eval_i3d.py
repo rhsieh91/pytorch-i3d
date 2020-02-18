@@ -106,15 +106,20 @@ def run(mode='rgb', root='', split='data/annotations/charades.json', batch_size=
             all_preds = np.append(all_preds, pred.tolist(), axis=0)
             all_labels = np.append(all_labels, labels.tolist(), axis=0)
         #print('Step {}: all_preds.shape={}, all_labels.shape={}'.format(i, all_preds.shape, all_labels.shape))
-        
-        all_APs = metrics.average_precision_score(y_true=all_labels.reshape((-1)), y_score=all_preds.reshape((-1)))
-        print('Step {}: all_APs={}'.format(i, all_APs))
+        #print('Step {}: all_preds={}, all_labels={}'.format(i, all_preds, all_labels))
+        if i % 10 == 0:
+            all_APs = [metrics.average_precision_score(y_true=all_labels[:, j], y_score=all_preds[:, j]) for j in range(157)]
+            mAP = np.nanmean(all_APs)
+            print('Step {}'.format(i))
+            print('all_APs:')
+            print(all_APs)
+            print('mAP = {}'.format(mAP))
 
     # Eval
-    all_APs = metrics.average_precision_score(y_true=all_labels.reshape((-1)), y_score=all_preds.reshape((-1)))
-    mAP = torch.mean(all_APs) # scalar value
+    all_APs = [metrics.average_precision_score(y_true=all_labels[:, j], y_score=all_preds[:, j]) for j in range(157)]
+    mAP = np.nanmean(all_APs)
     print('-' * 50)
-    print('{} mAP: {:.4f}'.format(phase, mAP))
+    print('Final mAP: {:.4f}'.format(mAP))
     print('-' * 50)
      
 
