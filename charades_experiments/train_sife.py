@@ -1,14 +1,12 @@
 # Contributor: piergiaj
 # Modified by Samuel Kwong
 
+from sklearn import metrics
 import os
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   
-os.environ["CUDA_VISIBLE_DEVICES"]='0,1,2,3'
 import sys
 import argparse
 import pickle 
 import datetime
-import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
@@ -30,28 +28,29 @@ from torchvision import datasets, transforms
 import numpy as np
 from pytorch_i3d import InceptionI3d
 from pytorch_sife import SIFE
-from charades_dataset_full import Charades as Dataset
+from charades_dataset_sife import Charades as Dataset
 
 from torch.utils.tensorboard import SummaryWriter
 
-def save_checkpoint(model, optimizer, loss, save_dir, epoch, n_iter):
+def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
     """Saves checkpoint of model weights during training."""
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    save_path = save_dir + str(epoch).zfill(2) + str(n_iter).zfill(6) + '.pt'
+    save_path = save_dir + str(epoch).zfill(3) + '.pt'
     torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss
+                'loss': loss,
+                'steps': steps
                 },
                 save_path)
 
-def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', 
+def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json', 
         train_scene_map_pkl='./data/annotations/charades_train_scene_map.pkl',
         test_scene_map_pkl='./data/annotations/charades_test_scene_map.pkl',
-        num_features=1024, batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=150):
+        num_features=1024, batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
 
     writer = SummaryWriter() # tensorboard logging
     
@@ -113,7 +112,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
 
     lr = init_lr
     optimizer = optim.Adam(sife.parameters(), lr=lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10, 20, 30, 40, 50, 60], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
 
     steps = 0 
     # TRAIN
@@ -132,11 +131,10 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 print('-'*10, 'VALIDATION', '-'*10)
             
             # Iterate over data.
-            num_correct_actions = 0
-            num_actions = 0
-            num_correct_scenes = 0
+            all_action_preds = []
+            all_scene_preds = []
             print('Entering data loading...')
-            for data in dataloaders[phase]:
+            for i, data in enumerate(dataloaders[phase]):
                 # get the inputs
                 inputs, action_labels, scene_labels, vid = data
 
@@ -144,8 +142,6 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 inputs = inputs.cuda()
                 action_labels = action_labels.cuda() # B x num_classes x num_frames
                 scene_labels = scene_labels.cuda() # B x num_frames
-                # print('action_labels shape = {}'.format(action_labels.shape))
-                # print('scene_labels shape = {}'.format(scene_labels.shape))
                 
                 if phase == 'train':
                     per_frame_action_logits, scene_logits = sife(inputs)
@@ -156,17 +152,10 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 # upsample to input size
                 per_frame_action_logits = F.interpolate(per_frame_action_logits, t, mode='linear') # B x Classes x T
                 max_frame_action_logits = torch.max(per_frame_action_logits, dim=2)[0] # B x Classes
-
-                predicted_action_labels = (F.sigmoid(max_frame_action_logits) >= 0.5).float() # for accuracy calculation purposes
                 action_labels, _ = torch.max(action_labels, dim=2) # B x Classes
-                # print('action_labels = {}'.format(action_labels))
-                num_correct_actions += torch.sum((predicted_action_labels + action_labels) == 2)
-                num_actions += torch.sum(action_labels, dim=(0, 1))
-
+                
                 _, pred_scene_labels = torch.max(scene_logits, dim=1)
                 scene_labels, _ = torch.max(scene_labels, dim=1) # B
-                # print('pred_scene_labels = {}, shape = {}, type = {}'.format(pred_scene_labels, pred_scene_labels.shape, type(pred_scene_labels)))
-                # print('scene_labels = {}, shape = {}, type = {}'.format(scene_labels, scene_labels.shape, type(scene_labels)))
                 num_correct_scenes += torch.sum(pred_scene_labels == scene_labels)
 
                 # Loss
@@ -185,26 +174,35 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                     if steps % 10 == 0:
                         print('Step {}: action_loss = {}, scene_loss = {}, total_loss = {}'.format(steps, action_loss, scene_loss, loss))
                     steps += 1
+                
+                # metrics for validation
+                pred_action = (F.sigmoid(max_frame_action_logits) >= 0.5).float()
+                if i == 0:
+                    all_action_preds = np.array(pred_action.tolist())
+                    all_action_labels = np.array(action_labels.tolist())
+                else:
+                    all_action_preds = np.append(all_action_preds, pred_action.tolist(), axis=0)
+                    all_action_labels = np.append(all_action_labels, action_labels.tolist(), axis=0)
 
-            # Accuracy
-            action_acc = float(num_correct_scenes) / float(num_actions)
+            # Eval after epoch
+            all_action_APs = [metrics.average_precision_score(y_true=all_action_labels[:, j], y_score=all_action_preds[:, j]) for j in range(157)]
             scene_acc = float(num_correct_scenes) / len(dataloaders[phase].dataset)
+            mAP_action = np.nanmean(all_action_APs)
             if phase == 'train':
-                writer.add_scalar('Accuracy/train_action', action_acc, epoch)
+                writer.add_scalar('mAP/train_action', mAP_action, epoch)
                 writer.add_scalar('Accuracy/train_scene', scene_acc, epoch)
                 print('-' * 50)
-                print('{}, action_acc: {:.4f}, scene_acc: {:.4f}'.format(phase, action_acc, scene_acc))
+                print('{}, action_acc: {:.4f}, scene_acc: {:.4f}'.format(phase, mAP_action, scene_acc))
                 print('-' * 50)
                 save_checkpoint(sife, optimizer, loss, save_dir, epoch, steps)
             else:
-                writer.add_scalar('Accuracy/val_action', action_acc, epoch)
+                writer.add_scalar('mAP/val_action', mAP_action, epoch)
                 writer.add_scalar('Accuracy/val_scene', scene_acc, epoch)
                 print('-' * 50)
-                print('{}, action_acc: {:.4f}, scene_acc: {:.4f}'.format(phase, action_acc, scene_acc))
+                print('{}, action_acc: {:.4f}, scene_acc: {:.4f}'.format(phase, mAP_action, scene_acc))
                 print('-' * 50)
-                save_checkpoint(sife, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
         
-        lr_sched.step()
+        lr_sched.step() # step after epoch
     
     writer.close()
      
@@ -222,7 +220,7 @@ if __name__ == '__main__':
         STRIDE = args.stride # temporal stride for sampling
         NUM_SPAN_FRAMES = args.num_span_frames # total number frames to sample for inputs
         NUM_FEATURES = args.num_features
-        NUM_EPOCHS = 150
+        NUM_EPOCHS = 200
         SAVE_DIR = './checkpoints-{}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
 
         if not os.path.exists(SAVE_DIR):

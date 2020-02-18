@@ -1,5 +1,6 @@
 # Contributor: piergiaj
 # Modified by Samuel Kwong and Richard Hsieh
+from sklearn import metrics
 
 import os
 import sys
@@ -20,7 +21,7 @@ from collections import OrderedDict
 
 import numpy as np
 from pytorch_i3d import InceptionI3d
-from charades_dataset_full import Charades as Dataset
+from charades_dataset_i3d import Charades as Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
@@ -35,7 +36,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    save_path = save_dir + str(epoch).zfill(2) + str(steps).zfill(6) + '.pt'
+    save_path = save_dir + str(epoch).zfill(3) + '.pt'
     torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
@@ -45,26 +46,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-    #def mean_ap_metric(predicts, targets):
-    #    """Compute mAP for Charades."""
-    #    predicts = np.vstack(predicts.cpu().detach())
-    #    targets = np.vstack(targets.cpu().detach())
-    #
-    #    predict = predicts[:, ~np.all(targets == 0, axis=0)]
-    #    target = targets[:, ~np.all(targets == 0, axis=0)]
-    #    aps = [0]
-    #    try:
-    #        aps = metrics.average_precision_score(target, predict, average=None)
-    #    except ValueError:
-    #        print(
-    #            'Average precision requires a sufficient number of samples \
-    #            in a batch which are missing in this sample.'
-    #        )
-    #
-    #    mean_ap = np.mean(aps)
-    #    return mean_ap 
-
-def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=125, num_epochs=150):
+def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -81,7 +63,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'training', root, mode, train_transforms, stride, num_span_frames)
+        train_dataset = Dataset(split, 'training', root, mode, train_transforms, stride, num_span_frames)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -94,7 +76,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, stride, num_span_frames)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
@@ -131,7 +113,7 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
     print('Loaded model.')
 
     optimizer = optim.Adam(i3d.parameters(), lr=init_lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [10000, 25000], gamma=0.1)
+    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
 
     steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
     start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
@@ -151,13 +133,12 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 print('-'*10, 'VALIDATION', '-'*10)
             
             # Iterate over data.
-            num_correct = 0
-            num_actions = 0
+            all_preds = []
+            all_labels = []
             print('Entering data loading...')
-            for data in dataloaders[phase]:
+            for i, data in enumerate(dataloaders[phase]):
                 # get the inputs
-                # note: for SIFE-Net we would also have scene_labels
-                inputs, labels, _, vid = data
+                inputs, labels, vid = data
 
                 t = inputs.shape[2]
                 inputs = inputs.cuda()
@@ -174,43 +155,40 @@ def run(init_lr=0.1, mode='rgb', root='', split='data/annotations/charades.json'
                 
                 max_frame_logits = torch.max(per_frame_logits, dim=2)[0] # B x Classes
                 labels = torch.max(labels, dim=2)[0] # B x Classes
-                
-                #num_correct += torch.sum((predicted_labels + labels) == 2)
-                #num_actions += torch.sum(labels, dim=(0, 1)) 
 
-                ## DEBUGGING
-                #print('----------DEBUGGING----------')
-                #print('labels:', labels)
-                #print('predicted_labels', predicted_labels)
-                #print('predicted_labels == labels', predicted_labels == labels)
-                #print('num_correct:', num_correct)
-                #print('num_actions:', num_actions)
-                #print('num predicted actions:', float(torch.sum(predicted_labels, dim=(0,1))))
-
-                # Loss
                 if phase == 'train':
                     loss = F.binary_cross_entropy_with_logits(max_frame_logits, labels)
                     writer.add_scalar('loss/train', loss, steps)
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-                    lr_sched.step()
                     if steps % 10 == 0:
                         print('Step {} {} loss: {:.4f}'.format(steps, phase, loss))
                     steps += 1
+                    
+                # metrics for validation
+                pred = (torch.sigmoid(max_frame_logits) >= 0.5).float() # predicted labels for this batch (B x C)
+                if i == 0:
+                    all_preds = np.array(pred.tolist())
+                    all_labels = np.array(labels.tolist())
+                else:
+                    all_preds = np.append(all_preds, pred.tolist(), axis=0)
+                    all_labels = np.append(all_labels, labels.tolist(), axis=0)
 
-            ## Accuracy
-            #predicted_labels = (torch.sigmoid(max_frame_logits) >= 0.5).float() # for eval metric calculation purposes
-            #mAP = mean_ap_metric(predicted_labels, labels)
-            #if phase == 'train':
-            #    writer.add_scalar('mAP/train', mAP, epoch)
-            #    print('-' * 50)
-            #    print('{} mAP: {:.4f}'.format(phase, mAP))
-            #    print('-' * 50)
-            #    save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
-            #else:
-            #    writer.add_scalar('mAP/val', mAP, epoch)
-            #    print('{} mAP: {:.4f}'.format(phase, mAP))
+            # Eval
+            all_APs = [metrics.average_precision_score(y_true=all_labels[:, j], y_score=all_preds[:, j]) for j in range(157)]
+            mAP = np.nanmean(all_APs)
+            if phase == 'train':
+                writer.add_scalar('mAP/train', mAP, epoch)
+                print('-' * 50)
+                print('{} mAP: {:.4f}'.format(phase, mAP))
+                print('-' * 50)
+                save_checkpoint(i3d, optimizer, loss, save_dir, epoch, steps) # save checkpoint after epoch!
+            else:
+                writer.add_scalar('mAP/val', mAP, epoch)
+                print('{} mAP: {:.4f}'.format(phase, mAP))
+        
+        lr_sched.step() # step after epoch
         
     writer.close()
      
@@ -227,7 +205,7 @@ if __name__ == '__main__':
         BATCH_SIZE = args.bs
         STRIDE = args.stride # temporal stride for sampling
         NUM_SPAN_FRAMES = args.num_span_frames # total number frames to sample for inputs
-        NUM_EPOCHS = 150
+        NUM_EPOCHS = 200
         SAVE_DIR = './checkpoints-{}-{:02d}-{:02d}-{:02d}-{:02d}-{:02d}/'.format(now.year, now.month, now.day, now.hour, now.minute, now.second)
 
         if not os.path.exists(SAVE_DIR):
