@@ -24,7 +24,7 @@ def load_scene_maps():
         test_scene_map = pickle.load(f2)
     return (train_scene_map, test_scene_map)
 
-def load_sample(split, root, vid, stride, num_span_frames, transforms, num_actions, scene_maps, is_sife):
+def load_sample(split_file, split, root, vid, stride, num_span_frames, transforms, num_actions, scene_maps, is_sife):
     num_avail_frames = len(os.listdir(os.path.join(root, vid)))
     num_frames_needed = num_span_frames * stride
     
@@ -36,7 +36,7 @@ def load_sample(split, root, vid, stride, num_span_frames, transforms, num_actio
 
     # frames
     frames = []
-    for i in range(offset, offset+num_span_frames, stride):
+    for i in range(offset, offset+num_frames_needed, stride):
         if i < num_avail_frames:
             img = pil_loader(os.path.join(root, vid, vid+'-'+str(i).zfill(6)+'.jpg'))
             img = transforms(img)
@@ -46,19 +46,21 @@ def load_sample(split, root, vid, stride, num_span_frames, transforms, num_actio
         frames.append(img)
 
     # actions label
-    actions_label = np.zeros((NUM_ACTIONS, num_span_frames), np.float32)
-    fps = num_avail_frames/data[vid]['duration'] # we use 24fps as provided by Charades website
-    for ann in data[vid]['actions']:
-        most_recent = None
-        for fr in range(offset, offset+num_frames_needed, stride):
-            if fr < num_avail_frames:
-                if fr/fps > ann[1] and fr/fps < ann[2]:
-                    actions_label[ann[0], int(fr/stride)] = 1 # binary classification
-                    most_recent = 1
-                else:
-                    most_recent = 0
-            else: # repeat last frame
-                actions_label[ann[0], int(fr/stride)] = most_recent # binary classification
+    actions_label = np.zeros((num_actions, num_span_frames), np.float32)
+    with open(split_file, 'r') as f:
+        data = json.load(f)
+        fps = num_avail_frames/data[vid]['duration'] # we use 24fps as provided by Charades website
+        for ann in data[vid]['actions']:
+            most_recent = None
+            for i,fr in enumerate(range(offset, offset+num_frames_needed, stride)):
+                if fr < num_avail_frames:
+                    if fr/fps > ann[1] and fr/fps < ann[2]:
+                        actions_label[ann[0], i] = 1 # binary classification
+                        most_recent = 1
+                    else:
+                        most_recent = 0
+                else: # repeat last frame
+                    actions_label[ann[0], i] = most_recent # binary classification
         
     # scene label (if needed)
     scene_label = None
@@ -73,15 +75,15 @@ def load_sample(split, root, vid, stride, num_span_frames, transforms, num_actio
     return frames, actions_label, scene_label
 
 def get_vid_names(split_file, split, root):
-    with open(split_file, 'r') as f1:
-        data = json.load(f1)
-    vid_names = []
-    for vid in data.keys():
-        if data[vid]['subset'] != split:
-            continue
-        if not os.path.exists(os.path.join(root, vid)):
-            continue
-        vid_names.append(vid)
+    with open(split_file, 'r') as f:
+        data = json.load(f)
+        vid_names = []
+        for vid in data.keys():
+            if data[vid]['subset'] != split:
+                continue
+            if not os.path.exists(os.path.join(root, vid)):
+                continue
+            vid_names.append(vid)
     return vid_names
 
 
@@ -109,7 +111,7 @@ class Charades(data_utl.Dataset):
             list of frames, actions label tensor, scene label tensor (if is_sife=True), and vid name
         """
         vid = self.vid_names[index]
-        imgs, actions_label, scene_label = load_sample(self.split, self.root, vid, self.stride, self.num_span_frames, self.transforms,
+        imgs, actions_label, scene_label = load_sample(self.split_file, self.split, self.root, vid, self.stride, self.num_span_frames, self.transforms,
                                                        self.num_actions, self.scene_maps, self.is_sife)
 
         inputs = torch.cat(imgs)
