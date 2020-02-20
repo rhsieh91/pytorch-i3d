@@ -122,7 +122,7 @@ class Charades(data_utl.Dataset):
             return inputs, torch.from_numpy(actions_label), vid
 
     def __len__(self):
-        return len(self.data)
+        return len(self.vid_names)
 
 
 if __name__ == '__main__':
