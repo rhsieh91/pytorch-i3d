@@ -189,7 +189,7 @@ if __name__ == '__main__':
         if not os.path.exists(SAVE_DIR):
             os.makedirs(SAVE_DIR)
         with open(SAVE_DIR + 'info.txt', 'w+') as f:
-            f.write('LR = {}\nBATCH_SIZE = {}\nSTRIDE = {}\nNUM_SPAN_FRAMES = {}\nEPOCHS = {}'.format(LR, BATCH_SIZE, STRIDE, NUM_SPAN_FRAMES, NUM_EPOCHS))
+            f.write('MODEL = {}\nLR = {}\nBATCH_SIZE = {}\nSTRIDE = {}\nNUM_SPAN_FRAMES = {}\nEPOCHS = {}'.format('I3D', LR, BATCH_SIZE, STRIDE, NUM_SPAN_FRAMES, NUM_EPOCHS))
         
         run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE,
             save_dir=SAVE_DIR, stride=STRIDE, num_span_frames=NUM_SPAN_FRAMES, num_epochs=NUM_EPOCHS)
