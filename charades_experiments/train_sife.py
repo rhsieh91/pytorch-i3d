@@ -116,7 +116,7 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
             
             # Iterate over data.
             all_action_preds = []
-            all_scene_preds = []
+            num_correct_scenes = 0
             print('Entering data loading...')
             for i, data in enumerate(dataloaders[phase]):
                 # get the inputs
@@ -160,7 +160,7 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
                     steps += 1
                 
                 # metrics for validation
-                pred_action = (F.sigmoid(max_frame_action_logits) >= 0.5).float()
+                pred_action = (torch.sigmoid(max_frame_action_logits) >= 0.5).float()
                 if i == 0:
                     all_action_preds = np.array(pred_action.tolist())
                     all_action_labels = np.array(action_labels.tolist())
