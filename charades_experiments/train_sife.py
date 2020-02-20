@@ -147,9 +147,9 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
                     action_loss = F.binary_cross_entropy_with_logits(max_frame_action_logits, action_labels)
                     scene_loss = F.cross_entropy(scene_logits, scene_labels)
                     loss = action_loss + scene_loss
-                    writer.add_scalar('Loss/train_action', action_loss, steps)
-                    writer.add_scalar('Loss/train_scene', scene_loss, steps)
-                    writer.add_scalar('Loss/train', loss, steps)
+                    writer.add_scalar('loss/train_action', action_loss, steps)
+                    writer.add_scalar('loss/train_scene', scene_loss, steps)
+                    writer.add_scalar('loss/train', loss, steps)
 
                     optimizer.zero_grad()
                     loss.backward()
