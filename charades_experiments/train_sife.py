@@ -13,6 +13,8 @@ parser.add_argument('--bs', type=int, help='batch size')
 parser.add_argument('--stride', type=int, help='temporal stride for sampling input frames')
 parser.add_argument('--num_span_frames', type=int, help='total number of frames to sample per input')
 parser.add_argument('--num_features', type=int, help='size of feature space (64 frames=7168, 32 frames=3072, 16 frames=1024)')
+parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoint (\'\' to train from kinetics baseline)')
+
 args = parser.parse_args()
 
 import torch
