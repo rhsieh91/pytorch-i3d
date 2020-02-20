@@ -109,9 +109,8 @@ class Charades(data_utl.Dataset):
             list of frames, actions label tensor, scene label tensor (if is_sife=True), and vid name
         """
         vid = self.vid_names[index]
-        if self.is_sife:
-            imgs, actions_label, scene_label = load_sample(self.split, self.root, vid, self.stride, self.num_span_frames, self.transforms,
-                                                           self.num_actions, self.scene_maps, self.is_sife)
+        imgs, actions_label, scene_label = load_sample(self.split, self.root, vid, self.stride, self.num_span_frames, self.transforms,
+                                                       self.num_actions, self.scene_maps, self.is_sife)
 
         inputs = torch.cat(imgs)
         inputs = inputs.permute(1, 0, 2, 3)
