@@ -5,7 +5,6 @@ from sklearn import metrics
 import os
 import sys
 import argparse
-import pickle 
 import datetime
 
 parser = argparse.ArgumentParser()
@@ -61,55 +60,43 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
                                          ])
     
     print('Getting train dataset...')
-    train_path = './data/train_dataset_{}_{}.pickle'.format(stride, num_span_frames)
-    if os.path.exists(train_path):
-        pickle_in = open(train_path, 'rb')
-        train_dataset = pickle.load(pickle_in)
-    else:
-        train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=True)
-        pickle_out = open(train_path, 'wb')
-        pickle.dump(train_dataset, pickle_out)
-        pickle_out.close()
-    print('Got train dataset.')
+    train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=True)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True, drop_last=True)
-
     print('Getting validation dataset...')
-    val_path = './data/val_dataset_{}_{}.pickle'.format(stride, num_span_frames)
-    if os.path.exists(val_path):
-        pickle_in = open(val_path, 'rb')
-        val_dataset = pickle.load(pickle_in)
-    else:
-        val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=True)
-        pickle_out = open(val_path, 'wb')
-        pickle.dump(val_dataset, pickle_out)
-        pickle_out.close()
-    print('Got val dataset.')
+    val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=True)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True, drop_last=True)    
 
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
 
-    
     print('Loading model...')
     # setup the model
 
     i3d = InceptionI3d(400, in_channels=3)
     i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
     sife = SIFE(backbone=i3d, num_features=num_features, num_actions=157, num_scenes=16)
-    #state_dict = torch.load('checkpoints/000990.pt')#['model_state_dict']
-    #checkpoint = OrderedDict()
-    #for k, v in state_dict.items():
-    #    name = k[7:] # remove 'module'
-    #    checkpoint[name] = v
+    if args.checkpoint_path:
+        state_dict = torch.load(args.checkpoint_path)['model_state_dict']
+        checkpoint = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:] # remove 'module'
+            checkpoint[name] = v
+        sife.load_state_dict(checkpoint)
     
     sife.cuda()
-    sife = nn.DataParallel(sife)
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.device_count() > 1:
+        print('Using {} GPUs'.format(torch.cuda.device_count()))
+        sife = nn.DataParallel(sife)
+    sife.to(device)
     print('Loaded model.')
 
     lr = init_lr
     optimizer = optim.Adam(sife.parameters(), lr=lr)
-    lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
+    # lr_sched = optim.lr_scheduler.MultiStepLR(optimizer, [30], gamma=0.1)
 
-    steps = 0 
+    steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
+    start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
+
     # TRAIN
     for epoch in range(num_epochs):
         print('-' * 50)
@@ -197,7 +184,7 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
                 print('{}, action_acc: {:.4f}, scene_acc: {:.4f}'.format(phase, mAP_action, scene_acc))
                 print('-' * 50)
         
-        lr_sched.step() # step after epoch
+        #lr_sched.step() # step after epoch
     
     writer.close()
      

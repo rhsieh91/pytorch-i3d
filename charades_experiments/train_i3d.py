@@ -5,7 +5,6 @@ from sklearn import metrics
 import os
 import sys
 import argparse
-import pickle 
 import datetime
 
 import torch
@@ -58,33 +57,13 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json', batc
                                          ])
     
     print('Getting train dataset...')
-    train_path = './data/train_dataset_{}_{}.pickle'.format(stride, num_span_frames)
-    if os.path.exists(train_path):
-        pickle_in = open(train_path, 'rb')
-        train_dataset = pickle.load(pickle_in)
-    else:
-        train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=False)
-        pickle_out = open(train_path, 'wb')
-        pickle.dump(train_dataset, pickle_out)
-        pickle_out.close()
-    print('Got train dataset.')
+    train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=False)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
-
     print('Getting validation dataset...')
-    val_path = './data/val_dataset_{}_{}.pickle'.format(stride, num_span_frames)
-    if os.path.exists(val_path):
-        pickle_in = open(val_path, 'rb')
-        val_dataset = pickle.load(pickle_in)
-    else:
-        val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=False)
-        pickle_out = open(val_path, 'wb')
-        pickle.dump(val_dataset, pickle_out)
-        pickle_out.close()
-    print('Got val dataset.')
+    val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=False)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)    
 
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
-
     
     print('Loading model...')
     # setup the model
@@ -212,4 +191,5 @@ if __name__ == '__main__':
         with open(SAVE_DIR + 'info.txt', 'w+') as f:
             f.write('LR = {}\nBATCH_SIZE = {}\nSTRIDE = {}\nNUM_SPAN_FRAMES = {}\nEPOCHS = {}'.format(LR, BATCH_SIZE, STRIDE, NUM_SPAN_FRAMES, NUM_EPOCHS))
         
-        run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE, save_dir=SAVE_DIR, stride=STRIDE, num_span_frames=NUM_SPAN_FRAMES, num_epochs=NUM_EPOCHS)
+        run(init_lr=LR, root='/vision/group/Charades_RGB/Charades_v1_rgb', batch_size=BATCH_SIZE,
+            save_dir=SAVE_DIR, stride=STRIDE, num_span_frames=NUM_SPAN_FRAMES, num_epochs=NUM_EPOCHS)
