@@ -65,7 +65,7 @@ def load_flow_frames(image_dir, vid, start, num):
     return np.asarray(frames, dtype=np.float32)
 
 
-def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_actions=157, num_scenes=16, is_sife=True):
+def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_actions=157, num_scenes=16, is_sife=False):
     dataset = []
     with open(split_file, 'r') as f1:
         data = json.load(f1)
