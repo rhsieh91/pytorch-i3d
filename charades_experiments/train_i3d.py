@@ -61,7 +61,7 @@ def run(init_lr=0.01, root='', split_file='data/annotations/charades.json', batc
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)
     print('Getting validation dataset...')
     val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=False)
-    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=0, pin_memory=True)    
+    val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)    
 
     dataloaders = {'train': train_dataloader, 'val': val_dataloader}
     
