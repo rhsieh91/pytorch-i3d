@@ -30,9 +30,9 @@ def load_sample(split_file, split, root, vid, stride, num_span_frames, transform
     
     upper_bound = num_avail_frames - num_frames_needed
     if split == 'training':
-        offset = 0 if upper_bound <= 0 else np.random.randint(0, upper_bound) # temporal augmentation
+        offset = 1 if upper_bound <= 0 else np.random.randint(1, upper_bound+1) # temporal augmentation
     else:
-        offset = 0
+        offset = 1
 
     # frames
     frames = []
