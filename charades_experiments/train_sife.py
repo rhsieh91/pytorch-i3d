@@ -28,7 +28,7 @@ from torchvision import datasets, transforms
 import numpy as np
 from pytorch_i3d import InceptionI3d
 from pytorch_sife import SIFE
-from charades_dataset_sife import Charades as Dataset
+from charades_dataset import Charades as Dataset
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -47,9 +47,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json', 
-        train_scene_map_pkl='./data/annotations/charades_train_scene_map.pkl',
-        test_scene_map_pkl='./data/annotations/charades_test_scene_map.pkl',
+def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades.json',
         num_features=1024, batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
 
     writer = SummaryWriter() # tensorboard logging
@@ -68,7 +66,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'training', root, mode, train_transforms, stride, num_span_frames)
+        train_dataset = Dataset(split_file, 'training', root, mode, train_transforms, stride, num_span_frames, is_sife=True)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -81,7 +79,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, train_scene_map_pkl, test_scene_map_pkl, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        val_dataset = Dataset(split_file, 'testing', root, mode, test_transforms, stride, num_span_frames, is_sife=True)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()

@@ -21,7 +21,7 @@ from collections import OrderedDict
 
 import numpy as np
 from pytorch_i3d import InceptionI3d
-from charades_dataset_i3d import Charades as Dataset
+from charades_dataset import Charades as Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, help='learning rate')
@@ -46,7 +46,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
+def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -63,7 +63,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split, 'training', root, mode, train_transforms, stride, num_span_frames)
+        train_dataset = Dataset(split_file, 'training', root, mode, train_transforms, stride, num_span_frames, is_sife=False)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -76,7 +76,7 @@ def run(init_lr=0.01, mode='rgb', root='', split='data/annotations/charades.json
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        val_dataset = Dataset(split_file, 'testing', root, mode, test_transforms, stride, num_span_frames, is_sife=False)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()

@@ -19,7 +19,7 @@ from collections import OrderedDict
 
 import numpy as np
 from pytorch_i3d import InceptionI3d
-from charades_dataset_i3d import Charades as Dataset
+from charades_dataset import Charades as Dataset
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--bs', type=int, help='batch size')
@@ -29,7 +29,7 @@ parser.add_argument('--checkpoint_path', type=str, help='path to saved checkpoin
 args = parser.parse_args()
 
 
-def run(mode='rgb', root='', split='data/annotations/charades.json', batch_size=8, stride=4, num_span_frames=125):
+def run(mode='rgb', root='', split_file='data/annotations/charades.json', batch_size=8, stride=4, num_span_frames=125):
     
     # setup dataset
     test_transforms = transforms.Compose([transforms.Resize((224,224)),
@@ -42,7 +42,7 @@ def run(mode='rgb', root='', split='data/annotations/charades.json', batch_size=
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split, 'testing', root, mode, test_transforms, stride, num_span_frames)
+        val_dataset = Dataset(split_file, 'testing', root, mode, test_transforms, stride, num_span_frames, is_sife=False)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()

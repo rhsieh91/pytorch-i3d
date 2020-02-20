@@ -65,10 +65,17 @@ def load_flow_frames(image_dir, vid, start, num):
     return np.asarray(frames, dtype=np.float32)
 
 
-def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_classes=157):
+def make_dataset(split_file, root, mode, stride, num_span_frames, num_classes=157, num_scenes=16, is_sife=True):
     dataset = []
     with open(split_file, 'r') as f1:
         data = json.load(f1)
+
+    if is_sife:
+        with open('./data/annotations/charades_train_scene_map.pkl', 'rb') as f2:
+            train_scene_map = pickle.load(f2)
+
+        with open('./data/annotations/charades_test_scene_map.pkl', 'rb') as f3:
+            test_scene_map = pickle.load(f3)
 
     for i, vid in enumerate(data.keys()):
         if (i % 500 == 0):
@@ -89,6 +96,13 @@ def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_cla
             
         action_label = np.zeros((num_classes, num_span_frames), np.float32)
 
+        if is_sife:
+            scene_label = np.zeros(num_span_frames, np.int64) # scene label goes from [0, num_class-1]
+            if split == 'training':
+                scene_label.fill(train_scene_map[vid])
+            else:
+                scene_label.fill(test_scene_map[vid])
+
         fps = num_avail_frames/data[vid]['duration'] # we use 24fps as provided by Charades website
         for ann in data[vid]['actions']:
             most_recent = None
@@ -101,20 +115,24 @@ def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_cla
                         most_recent = 0
                 else: # repeat last frame
                     action_label[ann[0], int(fr/stride)] = most_recent # binary classification
-        dataset.append((vid, action_label, num_span_frames*stride, stride))
+        if is_sife:
+            dataset.append((vid, action_label, scene_label, num_span_frames*stride, stride))
+        else:
+            dataset.append((vid, action_label, num_span_frames*stride, stride))
     
     return dataset
 
 
 class Charades(data_utl.Dataset):
 
-    def __init__(self, split_file, split, root, mode, transforms, stride, num_span_frames):
+    def __init__(self, split_file, split, root, mode='rgb', transforms=None, stride=4, num_span_frames=32, is_sife=False):
         
-        self.data = make_dataset(split_file, split, root, mode, stride, num_span_frames)
+        self.data = make_dataset(split_file, split, root, mode, stride, num_span_frames, is_sife)
         self.split_file = split_file
         self.transforms = transforms
         self.mode = mode
         self.root = root
+        self.is_sife = is_sife
 
     def __getitem__(self, index):
         """
@@ -124,7 +142,10 @@ class Charades(data_utl.Dataset):
         Returns:
             tuple: (image, target) where target is class_index of the target class.
         """
-        vid, action_label, nf, stride = self.data[index]
+        if is_sife:
+            vid, action_label, scene_label, nf, stride = self.data[index]
+        else:
+            vid, action_label, nf, stride = self.data[index]
 
         if self.mode == 'rgb':
             imgs = load_rgb_frames(self.root, vid, 1, nf, stride, self.transforms)
@@ -134,7 +155,52 @@ class Charades(data_utl.Dataset):
         inputs = torch.cat(imgs)
         inputs = inputs.permute(1, 0, 2, 3)
 
-        return inputs, torch.from_numpy(action_label), vid
+        if is_sife:
+            return inputs, torch.from_numpy(action_label), torch.from_numpy(scene_label), vid
+        else:
+            return inputs, torch.from_numpy(action_label), vid
 
     def __len__(self):
         return len(self.data)
+
+
+if __name__ == '__main__':
+    from torchvision import transforms
+    import pickle
+
+    split = 'data/annotations/charades.json'
+    root = ''
+    mode = 'rgb'
+    stride = 4
+    num_span_frames = 32
+    batch_size = 2
+    train_scene_map_pkl = './data/annotations/charades_train_scene_map.pkl'
+    test_scene_map_pkl = './data/annotations/charades_test_scene_map.pkl'
+
+    train_transforms = transforms.Compose([transforms.Resize((224,224)),
+                                           transforms.ToTensor()
+                                          ])
+    test_transforms = transforms.Compose([transforms.Resize((224,224)),
+                                          transforms.ToTensor()
+                                         ])
+    
+    print('Getting train dataset...')
+    train_path = './data/train_dataset_{}_{}.pickle'.format(stride, num_span_frames)
+    if os.path.exists(train_path):
+        pickle_in = open(train_path, 'rb')
+        train_dataset = pickle.load(pickle_in)
+    else:
+        train_dataset = Charades(split, train_scene_map_pkl, test_scene_map_pkl, 'training', root, mode, train_transforms, stride, num_span_frames)
+        pickle_out = open(train_path, 'wb')
+        pickle.dump(train_dataset, pickle_out)
+        pickle_out.close()
+    print('Got train dataset.')
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size, shuffle=True, num_workers=0, pin_memory=True)
+
+    for data in train_dataloader:
+        inputs, actions, scenes, vid = data
+        print('input shape = {}'.format(inputs.shape))
+        print('actions shape = {}'.format(actions.shape))
+        print('scenes shape = {}'.format(scenes.shape))
+        print('scenes = {}'.format(scenes))
+        print('vid = {}'.format(vid))
