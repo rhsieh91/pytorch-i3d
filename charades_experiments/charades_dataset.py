@@ -65,7 +65,7 @@ def load_flow_frames(image_dir, vid, start, num):
     return np.asarray(frames, dtype=np.float32)
 
 
-def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_actions=157, num_scenes=16, is_sife=True):
+def make_dataset(split_file, root, mode, stride, num_span_frames, num_classes=157, num_scenes=16, is_sife=True):
     dataset = []
     with open(split_file, 'r') as f1:
         data = json.load(f1)
@@ -94,7 +94,7 @@ def make_dataset(split_file, split, root, mode, stride, num_span_frames, num_act
         if mode == 'flow':
             num_span_frames=num_span_frames//2
             
-        action_label = np.zeros((num_actions, num_span_frames), np.float32)
+        action_label = np.zeros((num_classes, num_span_frames), np.float32)
 
         if is_sife:
             scene_label = np.zeros(num_span_frames, np.int64) # scene label goes from [0, num_class-1]
@@ -127,7 +127,7 @@ class Charades(data_utl.Dataset):
 
     def __init__(self, split_file, split, root, mode='rgb', transforms=None, stride=4, num_span_frames=32, is_sife=False):
         
-        self.data = make_dataset(split_file, split, root, mode, stride, num_actions=157, num_scenes=16, num_span_frames=num_span_frames, is_sife=is_sife)
+        self.data = make_dataset(split_file, split, root, mode, stride, num_span_frames, is_sife)
         self.split_file = split_file
         self.transforms = transforms
         self.mode = mode
@@ -142,7 +142,7 @@ class Charades(data_utl.Dataset):
         Returns:
             tuple: (image, target) where target is class_index of the target class.
         """
-        if is_sife:
+        if self.is_sife:
             vid, action_label, scene_label, nf, stride = self.data[index]
         else:
             vid, action_label, nf, stride = self.data[index]
@@ -155,7 +155,7 @@ class Charades(data_utl.Dataset):
         inputs = torch.cat(imgs)
         inputs = inputs.permute(1, 0, 2, 3)
 
-        if is_sife:
+        if self.is_sife:
             return inputs, torch.from_numpy(action_label), torch.from_numpy(scene_label), vid
         else:
             return inputs, torch.from_numpy(action_label), vid
