@@ -47,7 +47,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades.json',
+def run(init_lr=0.01, root='', split_file='data/annotations/charades.json',
         num_features=1024, batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
 
     writer = SummaryWriter() # tensorboard logging
@@ -66,7 +66,7 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split_file, 'training', root, mode, train_transforms, stride, num_span_frames, is_sife=True)
+        train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=True)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -79,7 +79,7 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split_file, 'testing', root, mode, test_transforms, stride, num_span_frames, is_sife=True)
+        val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=True)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
@@ -91,19 +91,16 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
     
     print('Loading model...')
     # setup the model
-    if mode == 'flow':
-        i3d = InceptionI3d(400, in_channels=2)
-        i3d.load_state_dict(torch.load('models/flow_imagenet.pt'))
-        sife = SIFE(backbone=i3d, num_features=num_features, num_actions=157, num_scenes=16)
-    else:
-        i3d = InceptionI3d(400, in_channels=3)
-        i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
-        sife = SIFE(backbone=i3d, num_features=num_features, num_actions=157, num_scenes=16)
-        #state_dict = torch.load('checkpoints/000990.pt')#['model_state_dict']
-        #checkpoint = OrderedDict()
-        #for k, v in state_dict.items():
-        #    name = k[7:] # remove 'module'
-        #    checkpoint[name] = v
+
+    i3d = InceptionI3d(400, in_channels=3)
+    i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
+    sife = SIFE(backbone=i3d, num_features=num_features, num_actions=157, num_scenes=16)
+    #state_dict = torch.load('checkpoints/000990.pt')#['model_state_dict']
+    #checkpoint = OrderedDict()
+    #for k, v in state_dict.items():
+    #    name = k[7:] # remove 'module'
+    #    checkpoint[name] = v
+    
     sife.cuda()
     sife = nn.DataParallel(sife)
     print('Loaded model.')

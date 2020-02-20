@@ -46,7 +46,7 @@ def save_checkpoint(model, optimizer, loss, save_dir, epoch, steps):
                 },
                 save_path)
 
-def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
+def run(init_lr=0.01, root='', split_file='data/annotations/charades.json', batch_size=8, save_dir='', stride=4, num_span_frames=32, num_epochs=200):
     writer = SummaryWriter() # tensorboard logging
     
     # setup dataset
@@ -63,7 +63,7 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
         pickle_in = open(train_path, 'rb')
         train_dataset = pickle.load(pickle_in)
     else:
-        train_dataset = Dataset(split_file, 'training', root, mode, train_transforms, stride, num_span_frames, is_sife=False)
+        train_dataset = Dataset(split_file, 'training', root, train_transforms, stride, num_span_frames, is_sife=False)
         pickle_out = open(train_path, 'wb')
         pickle.dump(train_dataset, pickle_out)
         pickle_out.close()
@@ -76,7 +76,7 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
         pickle_in = open(val_path, 'rb')
         val_dataset = pickle.load(pickle_in)
     else:
-        val_dataset = Dataset(split_file, 'testing', root, mode, test_transforms, stride, num_span_frames, is_sife=False)
+        val_dataset = Dataset(split_file, 'testing', root, test_transforms, stride, num_span_frames, is_sife=False)
         pickle_out = open(val_path, 'wb')
         pickle.dump(val_dataset, pickle_out)
         pickle_out.close()
@@ -88,22 +88,20 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
     
     print('Loading model...')
     # setup the model
-    if mode == 'flow':
-        i3d = InceptionI3d(400, in_channels=2)
-        i3d.load_state_dict(torch.load('models/flow_imagenet.pt'))
+
+    i3d = InceptionI3d(400, in_channels=3)
+    if args.checkpoint_path:
+        i3d.replace_logits(157)
+        state_dict = torch.load(args.checkpoint_path)['model_state_dict']
+        checkpoint = OrderedDict()
+        for k, v in state_dict.items():
+            name = k[7:] # remove 'module'
+            checkpoint[name] = v
+        i3d.load_state_dict(checkpoint)
     else:
-        i3d = InceptionI3d(400, in_channels=3)
-        if args.checkpoint_path:
-            i3d.replace_logits(157)
-            state_dict = torch.load(args.checkpoint_path)['model_state_dict']
-            checkpoint = OrderedDict()
-            for k, v in state_dict.items():
-                name = k[7:] # remove 'module'
-                checkpoint[name] = v
-            i3d.load_state_dict(checkpoint)
-        else:
-            i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
-            i3d.replace_logits(157)
+        i3d.load_state_dict(torch.load('models/rgb_imagenet.pt'))
+        i3d.replace_logits(157)
+
     i3d.cuda()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.device_count() > 1:
@@ -117,6 +115,7 @@ def run(init_lr=0.01, mode='rgb', root='', split_file='data/annotations/charades
 
     steps = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['steps']
     start_epoch = 0 if not args.checkpoint_path else torch.load(args.checkpoint_path)['epoch']
+    
     # TRAIN
     for epoch in range(start_epoch, num_epochs):
         print('-' * 50)
