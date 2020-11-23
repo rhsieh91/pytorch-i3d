@@ -1,20 +1,20 @@
 import os
 import pdb
-import torch
-import torchvision
+# import torch
+# import torchvision
 import numpy as np
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
+# import torch.nn as nn
+# import torch.optim as optim
+# import torch.nn.functional as F
 
-from pytorch_i3d import InceptionI3d
-from pytorch_sife import SIFE
-from torch.optim import lr_scheduler
-from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, ToTensor, Resize
-from torch.utils.tensorboard import SummaryWriter
-
-from data_loader_jpeg import *
+# from pytorch_i3d import InceptionI3d
+# from pytorch_sife import SIFE
+# from torch.optim import lr_scheduler
+# from torch.utils.data import DataLoader
+# from torchvision.transforms import Compose, ToTensor, Resize
+# from torch.utils.tensorboard import SummaryWriter
+#
+# from data_loader_jpeg import *
 
 # from sklearn.manifold import TSNE
 from MulticoreTSNE import MulticoreTSNE as TSNE
@@ -32,23 +32,23 @@ BATCH_SIZE = 128
 IS_BASELINE = True # use baseline i3d
 DATA_PARALLEL = True # model trained using nn.DataParallel
 CHECKPOINT_PATH = '/vision/u/rhsieh91/pytorch-i3d/checkpoints-2019-12-9-22-36-12/22085238.pt' # epoch 22
-FEATURES_PATH = '/vision/u/samkwong/pytorch-i3d/input_features_i3d_epoch22.npy'
+FEATURES_PATH = '/vision/u/samkwong/sife-net/jester_experiments/input_features_i3d_epoch22.npy'
 FEATURES_SAVE_PATH = 'input_features_i3d_epoch22' # features will only be saved if FEATURES_PATH is defined
-ACTIONS_PATH = '/vision/u/samkwong/pytorch-i3d/input_actions_i3d_epoch22.npy'
+ACTIONS_PATH = '/vision/u/samkwong/sife-net/jester_experiments/input_actions_i3d_epoch22.npy'
 ACTIONS_SAVE_PATH = 'input_actions_i3d_epoch22'
-TSNE_ACTION_SAVE_PATH = 'tsne_i3d_action_jester_epoch22.png'
+TSNE_ACTION_SAVE_PATH = '/vision2/u/samkwong/pytorch-cnn-visualizations-master/tsne_i3d_jester.png' #'tsne_i3d_action_jester_epoch22.png'
 
 """ sife params """
 #IS_BASELINE = False # use sife
 #DATA_PARALLEL = False # model trained without using nn.DataParallel
 #CHECKPOINT_PATH = '/vision/u/samkwong/pytorch-i3d/checkpoints-2019-12-9-15-47-16/22170453.pt' # epoch 22
-#FEATURES_PATH = '/vision/u/samkwong/pytorch-i3d/input_features_sife_epoch22.npy'
+# FEATURES_PATH = '/vision/u/samkwong/sife-net/jester_experiments/input_features_sife_epoch22.npy'
 #FEATURES_SAVE_PATH = 'input_features_sife_epoch22' # features will only be saved if FEATURES_PATH is defined
-#ACTIONS_PATH = '/vision/u/samkwong/pytorch-i3d/input_actions_sife_epoch22.npy'
+# ACTIONS_PATH = '/vision/u/samkwong/sife-net/jester_experiments/input_actions_sife_epoch22.npy'
 #ACTIONS_SAVE_PATH = 'input_actions_sife_epoch22'
 #SCENES_PATH = '/vision/u/samkwong/pytorch-i3d/input_scenes_sife_epoch22.npy'
 #SCENES_SAVE_PATH = 'input_scenes_sife_epoch22'
-#TSNE_ACTION_SAVE_PATH = 'tsne_sife_action_jester_epoch22.png'
+# TSNE_ACTION_SAVE_PATH = '/vision2/u/samkwong/pytorch-cnn-visualizations-master/tsne_sife_jester.png'
 #TSNE_SCENE_SAVE_PATH = 'tsne_sife_scene_jester_epoch22.png'
 
 
@@ -141,8 +141,11 @@ def get_test_loader(model):
 
 def plot_tsne(inputs_truths, colors, labels, save_path):
     for i, c, label in zip(range(len(colors))[::-1], colors[::-1], labels[::-1]):
-        fig = plt.scatter(features_embedded[inputs_truths == i, 0], features_embedded[inputs_truths == i, 1], c=c, label=label) 
-    plt.legend()
+        # if label == 'other':
+        #     continue
+        fig = plt.scatter(features_embedded[inputs_truths == i, 0], features_embedded[inputs_truths == i, 1], c=c, s=2, label=label)
+    plt.legend(prop={'size':17}, bbox_to_anchor=(0.4, 1.1), loc='upper right', markerscale=5)
+    plt.axis('off')
     plt.savefig(save_path)
     fig.remove()
 
@@ -169,13 +172,19 @@ else:
 
 # Calculate TSNE
 print("Starting TSNE")
-features_embedded = TSNE(n_jobs=8).fit_transform(inputs_features) # MultiCoreTSNE automatically uses n_components=2
+TSNE_EMB = '/vision2/u/samkwong/pytorch-cnn-visualizations-master/jester_{}_features_emb.npy'.format('i3d')
+if os.path.exists(TSNE_EMB):
+    features_embedded = np.load(TSNE_EMB)
+else:
+    features_embedded = TSNE(n_jobs=8).fit_transform(inputs_features) # MultiCoreTSNE automatically uses n_components=2
+    np.save(TSNE_EMB, features_embedded)
+
 print("Finished TSNE")
 print('feautures_embedded shape = {}'.format(features_embedded.shape))
 
 # Plot TSNE for action
 print("Plotting action TSNE")
-action_colors = ['r', 'g', 'b', 'c', 'grey'] # create color list with num elements equal to num action labels 
+action_colors = ['#cc0000', '#33cc00', '#0033cc', '#6600cc', '#cccccc'] # create color list with num elements equal to num action labels
 action_labels = ['swiping-left', 'swiping-right', 'swiping-down', 'swiping-up', 'other']
 plot_tsne(inputs_actions, action_colors, action_labels, TSNE_ACTION_SAVE_PATH)
 
